@@ -189,7 +189,7 @@ rm brightsign-${BRIGHTSIGN_OS_VERSION}-src-oe.tar.gz
 
 ```
 
-___IMPORTANT___: Building an OpenEmbedded project can be very particular in terms of packages and setup. For that reason it __strongly recommended__ to use the [Docker build](https://github.com/brightsign/extension-template/blob/main/README.md#recommended-docker) approadh.
+___IMPORTANT___: Building an OpenEmbedded project can be very particular in terms of packages and setup. For that reason it __strongly recommended__ to use the [Docker build](https://github.com/brightsign/extension-template/blob/main/README.md#recommended-docker) approach.
 
 ```sh
 # Build the SDK in Docker -- RECOMMENDED
@@ -200,6 +200,11 @@ docker build --rm --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) --u
 
 mkdir -p srv
 # the build process puts some output in srv
+
+sudo sh -c 'echo 120000 > /proc/sys/vm/max_map_count'
+# increase the map count to allow docker to build
+sudo sh -c 'echo "vm.max_map_count = 120000" > /etc/sysctl.d/local.conf'
+# make it permanent
 
 docker run -it --rm \
   -v $(pwd)/brightsign-oe:/home/builder/bsoe -v $(pwd)/srv:/srv \
