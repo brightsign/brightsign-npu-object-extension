@@ -203,7 +203,7 @@ mkdir -p srv
 
 sudo sh -c 'echo 120000 > /proc/sys/vm/max_map_count'
 # increase the map count to allow docker to build
-sudo sh -c 'echo "vm.max_map_count = 120000" > /etc/sysctl.d/local.conf'
+echo "vm.max_map_count = 120000" | sudo tee /etc/sysctl.d/local.conf
 # make it permanent
 
 docker run -it --rm \
