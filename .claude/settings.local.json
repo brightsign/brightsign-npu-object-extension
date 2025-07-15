@@ -18,7 +18,14 @@
       "Bash(source:*)",
       "Bash(LD_LIBRARY_PATH=.:$LD_LIBRARY_PATH ./RK3588/yolo_demo --help)",
       "Bash(sed:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(g++:*)",
+      "Bash(./test_class_parsing)",
+      "Bash(./test_integration)",
+      "Bash(/tmp/test_refactored_publishers:*)",
+      "Bash(/tmp/test_frame_writer_filtering:*)",
+      "Bash(/tmp:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }

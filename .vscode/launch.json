@@ -12,8 +12,9 @@
             "args": [
                     // "${workspaceFolder}/build/model/yolox_s.rknn",
                     "${workspaceFolder}/build/model/yolov8n.rknn",
-                    // "/dev/video0"
-                    "${workspaceFolder}/toolkit/rknn_model_zoo/examples/yolov8/model/bus.jpg"
+                    "/dev/video0",
+                    // "${workspaceFolder}/toolkit/rknn_model_zoo/examples/yolov8/model/bus.jpg",
+                    "--classes", "can,remote,alien"
                     ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
