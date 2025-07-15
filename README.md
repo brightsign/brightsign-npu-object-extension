@@ -1,3 +1,10 @@
+# WORK IN PROGRESS - DO NOT USE YET
+# WORK IN PROGRESS - DO NOT USE YET
+# WORK IN PROGRESS - DO NOT USE YET
+# WORK IN PROGRESS - DO NOT USE YET
+# WORK IN PROGRESS - DO NOT USE YET
+# WORK IN PROGRESS - DO NOT USE YET
+
 # BrightSign YOLO Object Detection BSMP (ALPHA RELEASE)
 
 This is an example BrightSign Model Package (BSMP) that implements Object Detection using YOLO frameworks (YOLO Simplified and YOLOX) on the BrightSign player NPU. This can be used as a template for development of other BSMP by partners and third-parties.
