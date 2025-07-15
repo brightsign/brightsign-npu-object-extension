@@ -1,13 +1,16 @@
 #include "frame_writer.h"
 #include "inference.h"
+#include "utils.h"
 #include <cstdio>
 #include <cstring>
 
 void DecoratedFrameWriter::writeFrame(cv::Mat& frame, const InferenceResult& result) {
-    // Check if we have any valid detections (score > 0 and class_id >= 0)
+    // Check if we have any valid detections (score > 0 and class_id >= 0) that are also selected
     int valid_detections = 0;
     for (int i = 0; i < result.detections.count; i++) {
-        if (result.detections.results[i].prop > 0.0f && result.detections.results[i].cls_id >= 0) {
+        if (result.detections.results[i].prop > 0.0f && 
+            result.detections.results[i].cls_id >= 0 &&
+            isClassSelected(result.detections.results[i].cls_id, result.selected_classes)) {
             valid_detections++;
         }
     }
@@ -37,6 +40,12 @@ void DecoratedFrameWriter::writeFrame(cv::Mat& frame, const InferenceResult& res
                 // Skip detections with invalid scores or class_ids
                 if (detection.prop <= 0.0f || detection.cls_id < 0) {
                     printf("Skipping invalid detection: prop=%.2f, cls_id=%d\n", detection.prop, detection.cls_id);
+                    continue;
+                }
+                
+                // Skip detections that are not in the selected classes
+                if (!isClassSelected(detection.cls_id, result.selected_classes)) {
+                    printf("Skipping unselected class: cls_id=%d\n", detection.cls_id);
                     continue;
                 }
                 

@@ -27,7 +27,7 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
         printf("Error: Empty input image passed to runInference\n");
         object_detect_result_list empty_results;
         memset(&empty_results, 0, sizeof(empty_results));
-        return InferenceResult{empty_results, std::chrono::system_clock::now()};
+        return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes};
     }
     
     // Ensure the image has the right format
@@ -53,12 +53,12 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
         printf("Exception in cv_to_image_buffer: %s\n", e.what());
         object_detect_result_list empty_results;
         memset(&empty_results, 0, sizeof(empty_results));
-        return InferenceResult{empty_results, std::chrono::system_clock::now()};
+        return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes};
     }
 
     object_detect_result_list empty_results;
     memset(&empty_results, 0, sizeof(empty_results));
-    InferenceResult final_result{empty_results, std::chrono::system_clock::now()};
+    InferenceResult final_result{empty_results, std::chrono::system_clock::now(), selected_classes};
 
     printf("calling inference_yolo_model\n");
     object_detect_result_list results;
@@ -73,6 +73,7 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
     // Set the detection results
     final_result.detections = results;
     final_result.timestamp = std::chrono::system_clock::now();
+    final_result.selected_classes = selected_classes;  // Pass selected classes along
     printf("inference_yolo_model success! count=%d\n", results.count);
 
     frames++;
@@ -86,8 +87,9 @@ MLInferenceThread::MLInferenceThread(
         ThreadSafeQueue<InferenceResult>& queue, 
         std::atomic<bool>& isRunning,
         int target_fps,
-        std::shared_ptr<FrameWriter> writer)
-    : resultQueue(queue), running(isRunning), target_fps(target_fps), frameWriter(writer) {
+        std::shared_ptr<FrameWriter> writer,
+        const std::vector<int>& selected_classes)
+    : resultQueue(queue), running(isRunning), target_fps(target_fps), frameWriter(writer), selected_classes(selected_classes) {
     
     // Store pointer to source name (argv remains valid)
     this->source_name = source_name;

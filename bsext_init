@@ -89,6 +89,17 @@ get_model_path() {
     echo "${MODEL_PATH}"
 }
 
+get_selected_classes() {
+    # check registry for selected classes
+    # allows user to specify which classes to detect
+    reg_selected_classes=$(registry extension ${DAEMON_NAME}-classes)
+    if [ -n "${reg_selected_classes}" ]; then
+        echo "${reg_selected_classes}"
+    else
+        echo ""  # Empty string means all classes
+    fi
+}
+
 
 # Common function to run the attention demo
 run_yolo_demo() {
@@ -98,8 +109,17 @@ run_yolo_demo() {
     SOC_HOME=${SCRIPT_PATH}/${SOC_NAME}
     cd ${SOC_HOME}
 
+    # Build command arguments
     CMD_ARGS="$(get_model_path) $(get_video_device)"
-    echo "Using Model and Device: ${CMD_ARGS}"
+    
+    # Add classes parameter if specified
+    SELECTED_CLASSES=$(get_selected_classes)
+    if [ -n "${SELECTED_CLASSES}" ]; then
+        CMD_ARGS="${CMD_ARGS} --classes ${SELECTED_CLASSES}"
+        echo "Using Model, Device, and Classes: ${CMD_ARGS}"
+    else
+        echo "Using Model and Device: ${CMD_ARGS}"
+    fi
     
     # Default to running in foreground
     local background=$1

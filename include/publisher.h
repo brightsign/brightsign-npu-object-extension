@@ -17,6 +17,25 @@ public:
     virtual std::string formatMessage(const InferenceResult& result) = 0;
 };
 
+// Abstract base class for formatters with optional class name mapping
+class MappedMessageFormatter : public MessageFormatter {
+protected:
+    std::unordered_map<std::string, std::string> class_mapping;
+    
+    // Extract only detections that match selected classes
+    std::vector<object_detect_result> extractSelectedClasses(const InferenceResult& result) const;
+    
+    // Apply class name mapping if configured
+    std::string mapClassName(const std::string& original_name) const;
+    
+public:
+    // Constructor with optional class name mapping
+    MappedMessageFormatter(const std::unordered_map<std::string, std::string>& mapping = {})
+        : class_mapping(mapping) {}
+    
+    virtual ~MappedMessageFormatter() = default;
+};
+
 // Concrete implementation of MessageFormatter for JSON format
 class JsonMessageFormatter : public MessageFormatter {
 private:
@@ -35,16 +54,36 @@ public:
 };
 
 // Concrete implementation for faces JSON format (UDP port 5002)
-// Maps people count to faces_* properties
-class FacesJsonMessageFormatter : public MessageFormatter {
+// Maps people count to faces_* properties using generic mapping system
+class FacesJsonMessageFormatter : public MappedMessageFormatter {
 public:
+    FacesJsonMessageFormatter();
     std::string formatMessage(const InferenceResult& result) override;
 };
 
 // Concrete implementation for faces BrightScript format (UDP port 5000)  
-// Maps people count to faces_* properties in BrightScript format
-class FacesBSMessageFormatter : public MessageFormatter {
+// Maps people count to faces_* properties in BrightScript format using generic mapping system
+class FacesBSMessageFormatter : public MappedMessageFormatter {
 public:
+    FacesBSMessageFormatter();
+    std::string formatMessage(const InferenceResult& result) override;
+};
+
+// Concrete implementation for selective JSON format
+// Extracts and outputs counts only for selected classes as JSON object
+class SelectiveJsonMessageFormatter : public MappedMessageFormatter {
+public:
+    SelectiveJsonMessageFormatter(const std::unordered_map<std::string, std::string>& mapping = {})
+        : MappedMessageFormatter(mapping) {}
+    std::string formatMessage(const InferenceResult& result) override;
+};
+
+// Concrete implementation for selective BrightScript format
+// Extracts and outputs counts only for selected classes in BrightScript format
+class SelectiveBSMessageFormatter : public MappedMessageFormatter {
+public:
+    SelectiveBSMessageFormatter(const std::unordered_map<std::string, std::string>& mapping = {})
+        : MappedMessageFormatter(mapping) {}
     std::string formatMessage(const InferenceResult& result) override;
 };
 

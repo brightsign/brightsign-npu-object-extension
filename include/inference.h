@@ -5,6 +5,7 @@
 #include <chrono>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <opencv2/opencv.hpp>
 
@@ -22,6 +23,7 @@
 struct InferenceResult {
     object_detect_result_list detections;  // YOLO detection results
     std::chrono::system_clock::time_point timestamp;
+    std::vector<int> selected_classes;  // Selected class IDs for filtering
 };
 
 
@@ -34,6 +36,7 @@ private:
     const char* source_name;
     std::unique_ptr<rknn_app_context_t> rknn_app_ctx;
     std::shared_ptr<FrameWriter> frameWriter;
+    std::vector<int> selected_classes;  // Selected class IDs for filtering
     
     // Simulated ML model inference
     InferenceResult runInference(cv::Mat& img);
@@ -45,7 +48,8 @@ public:
         ThreadSafeQueue<InferenceResult>& queue, 
         std::atomic<bool>& isRunning,
         int target_fps,
-        std::shared_ptr<FrameWriter> writer = nullptr);
+        std::shared_ptr<FrameWriter> writer = nullptr,
+        const std::vector<int>& selected_classes = {});
     ~MLInferenceThread(); // Destructor declaration
     void operator()();
     void runSingleInference(); // Single-shot inference for file input

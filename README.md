@@ -1,15 +1,18 @@
-# WORK IN PROGRESS - DO NOT USE YET
-# WORK IN PROGRESS - DO NOT USE YET
-# WORK IN PROGRESS - DO NOT USE YET
-# WORK IN PROGRESS - DO NOT USE YET
-# WORK IN PROGRESS - DO NOT USE YET
-# WORK IN PROGRESS - DO NOT USE YET
+# BrightSign YOLO Object Detection BSMP
 
-# BrightSign YOLO Object Detection BSMP (ALPHA RELEASE)
+**NEW**: Now supports selective class detection - focus on specific object classes while preserving complete detection data!
 
 This is an example BrightSign Model Package (BSMP) that implements Object Detection using YOLO frameworks (YOLO Simplified and YOLOX) on the BrightSign player NPU. This can be used as a template for development of other BSMP by partners and third-parties.
 
 BSMP are delivered as an BrightSign OS (BOS) "extension." Extensions are delivered as firmware update files that are installed on a reboot. These are basically Linux squashfs file systems that extend the firmware to include the BSMP. You can learn more about extensions in our [Extension Template Repository](https://github.com/brightsign/extension-template).
+
+## Table of Contents
+
+- [Selective Class Detection Feature](#selective-class-detection-feature) ⭐ **NEW**
+- [Supported Players](#supported-players)
+- [Supported YOLO Models](#supported-yolo-models)
+- [Extension Control](#extension-control)
+- [Project Overview & Requirements](#project-overview--requirements)
 
 ## Supported Players
 
@@ -27,7 +30,7 @@ In general, any camera supported by Linux *should* work.  We've had great luck w
 
 ## Decorated Camera Output
 
-Every frame of video captured is processed through the model.  Every detected object has a bounding box drawn around it.  The image is written to a file on the /tmp folder.  This is a ram disk so it will not impact the life of the storage.
+Every frame of video captured is processed through the model. By default, every detected object has a bounding box drawn around it. With the selective class detection feature, you can choose to display only specific object classes while still preserving complete detection data. The decorated image is written to `/tmp/output.jpg` on the RAM disk to avoid impacting storage life.
 
 ## Supported YOLO Models
 
@@ -69,9 +72,9 @@ When provided with a Video for Linux device (e.g., `/dev/video0`), the extension
 1. Loads the compiled YOLO model (YOLO Simplified or YOLOX) into the Rockchip NPU
 2. Continuously captures video frames from an attached USB webcam using OpenCV
 3. Runs YOLO object detection on each frame at ~30 FPS
-4. Continuously updates the decorated image to `/tmp/output.jpg`
-5. Writes inference results to `/tmp/results.json` once per second
-6. Publishes person detection data via UDP to localhost ports 5002 and 5003
+4. Continuously updates the decorated image to `/tmp/output.jpg` (optionally filtering visual output by selected classes)
+5. Writes complete inference results to `/tmp/results.json` once per second (all detections preserved)
+6. Publishes selective class detection data via UDP to localhost ports 5002 (JSON) and 5000 (BrightScript)
 
 ### One-Shot Image Mode (Single Inference)
 
@@ -80,17 +83,18 @@ When provided with an image file path (e.g., `/tmp/input.jpg`), the extension:
 1. Loads the compiled YOLO model (YOLO Simplified or YOLOX) into the Rockchip NPU
 2. Processes the single input image file
 3. Runs YOLO object detection once on the provided image
-4. Saves the decorated result image to `/tmp/output.jpg`
-5. Writes the inference results to `/tmp/results.json`
+4. Saves the decorated result image to `/tmp/output.jpg` (optionally filtering visual output by selected classes)
+5. Writes the complete inference results to `/tmp/results.json` (all detections preserved)
 6. Exits after processing
 
 ### Extension Control
 
-This extension allows three optional registry keys to be set to customize behavior:
+This extension allows four optional registry keys to be set to customize behavior:
 
 * Disable the auto-start of the extension -- this can be useful in debugging or other problems
 * Set the `v4l` device filename to override the auto-discovered device
 * Set a custom model path to use different YOLO models
+* **NEW**: Select specific object classes for visual display and UDP output
 
 **Registry keys are organized in the `extension` section**
 
@@ -98,7 +102,110 @@ This extension allows three optional registry keys to be set to customize behavi
 | --- | --- | --- |
 | `bsext-yolo-auto-start` | `true` or `false` | when truthy, disables the extension from autostart (`bsext_init start` will simply return). The extension can still be manually run with `bsext_init run` |
 | `bsext-yolo-video-device` | a valid v4l device file name like `/dev/video0` or `/dev/video1` | normally not needed, but may be useful to override for some unusual or test condition |
+| `bsext-yolo-classes` | comma-separated list of COCO class names like `person,car,dog` | __NEW__: filters visual output and UDP messages to only show selected classes. Complete detection data is still preserved in `/tmp/results.json` |
 | `bsext-yolo-model-path` | full path to a `.rknn` model file | allows using custom YOLO models (YOLO Simplified or YOLOX) instead of the default model |
+
+[COCO Class Names](https://gist.github.com/AruniRC/7b3dadd004da04c80198557db5da4bda)
+
+## Selective Class Detection Feature
+
+This extension now supports selective class detection, allowing you to focus on specific object classes while maintaining complete detection data. This feature is useful for applications that only need to visualize or respond to certain types of objects.
+
+### How It Works
+
+- **Complete Detection**: The model always processes all objects in the scene
+- **Selective Display**: Only selected classes are shown in the decorated output image (`/tmp/output.jpg`)
+- **Selective UDP**: Only selected classes are counted and sent via UDP to ports 5002 and 5000
+- **Complete Results**: All detections are preserved in `/tmp/results.json` regardless of selection
+
+### Usage Methods
+
+#### 1. Registry-Based Configuration (Recommended for Production)
+
+```bash
+# Set the registry key to select classes
+registry extension bsext-yolo-classes "person,car,dog"
+
+# Start or restart the extension
+./bsext_init restart
+```
+
+#### 2. Command Line Override (Useful for Testing)
+
+```bash
+# Direct command line usage
+./yolo_demo model/yolov8n.rknn /dev/video0 --classes person,car
+
+# Single image processing with class selection
+./yolo_demo model/yolov8n.rknn /tmp/input.jpg --classes person,bicycle,car
+
+# Combined with other options
+./yolo_demo model/yolov8n.rknn /dev/video0 --suppress-empty --classes person
+```
+
+### Supported COCO Classes
+
+The extension supports all 80 COCO classes. Some common examples:
+
+| Category | Classes |
+|----------|---------|
+| **People & Animals** | `person`, `cat`, `dog`, `horse`, `sheep`, `cow`, `elephant`, `bear`, `zebra`, `giraffe` |
+| **Vehicles** | `car`, `truck`, `bus`, `motorcycle`, `bicycle`, `airplane`, `boat`, `train` |
+| **Sports & Recreation** | `sports ball`, `kite`, `baseball bat`, `skateboard`, `surfboard`, `tennis racket` |
+| **Indoor Objects** | `chair`, `couch`, `bed`, `dining table`, `tv`, `laptop`, `cell phone`, `book` |
+| **Kitchen & Food** | `bottle`, `wine glass`, `cup`, `bowl`, `banana`, `apple`, `pizza`, `cake` |
+
+For the complete list of 80 supported classes, see `model/coco_80_labels_list.txt`.
+
+### Output Behavior Examples
+
+#### Example 1: Person Detection Only
+
+```bash
+# Configuration
+registry extension bsext-yolo-classes "person"
+
+# Results:
+# - /tmp/output.jpg: Shows bounding boxes only around people
+# - /tmp/results.json: Contains ALL objects (person, car, dog, etc.)
+# - UDP Port 5002: {"person": 3, "timestamp": 1234567890}
+# - UDP Port 5000: "person:3!!timestamp:1234567890"
+```
+
+#### Example 2: Vehicle Detection
+
+```bash
+# Configuration  
+registry extension bsext-yolo-classes "car,truck,bus,motorcycle"
+
+# Results:
+# - /tmp/output.jpg: Shows bounding boxes only around vehicles
+# - /tmp/results.json: Contains ALL objects detected in scene
+# - UDP Port 5002: {"car": 2, "truck": 1, "timestamp": 1234567890}
+# - UDP Port 5000: "car:2!!truck:1!!timestamp:1234567890"
+```
+
+#### Example 3: Default Behavior (All Classes)
+
+```bash
+# Configuration: No registry key set, or empty value
+# Results:
+# - /tmp/output.jpg: Shows bounding boxes around ALL detected objects
+# - /tmp/results.json: Contains ALL objects detected in scene
+# - UDP messages: Include counts for all detected classes
+```
+
+### Error Handling
+
+- **Invalid class names**: Warning logged, invalid classes ignored
+- **Empty class list**: Treated as "all classes selected" (backward compatible)
+- **Missing labels file**: Clear error message with file path
+
+### Performance Impact
+
+- **Minimal**: Only adds class ID checking during output processing
+- **No inference impact**: Model processing speed unchanged
+- **Memory efficient**: No additional runtime memory allocations
 
 ## Project Overview & Requirements
 
@@ -552,3 +659,20 @@ cp /var/volatile/bsext/ext_npu_yolo/uninstall.sh /usr/local/
 #reboot
 
 ```
+
+## UDP Debugging: Monitor Publications
+### On OrangePI (Linux/x86):
+To monitor UDP messages published on port 5002, use:
+
+```bash
+nc -ul 5002
+```
+
+### On BrightSign Player:
+Use socat to listen for UDP messages:
+
+```bash
+socat - UDP-RECV:5002
+```
+
+This will display incoming UDP messages sent to port 5002.

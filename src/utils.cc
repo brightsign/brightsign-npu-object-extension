@@ -1,6 +1,11 @@
 #include "utils.h"
 #include <iostream>
 #include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+#include <unordered_map>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -86,4 +91,74 @@ void deleteFilesInFolder(const std::string& folderPath) {
     } catch (const std::exception& e) {
         std::cerr << "Error deleting files: " << e.what() << std::endl;
     }
+}
+
+// Load COCO class mapping from labels file
+std::unordered_map<std::string, int> loadCocoClassMapping(const std::string& labels_file_path) {
+    std::unordered_map<std::string, int> class_mapping;
+    std::ifstream file(labels_file_path);
+    
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open labels file: " << labels_file_path << std::endl;
+        return class_mapping;
+    }
+    
+    std::string line;
+    int class_id = 0;
+    
+    while (std::getline(file, line)) {
+        // Remove trailing whitespace and newlines
+        line.erase(std::find_if(line.rbegin(), line.rend(), [](unsigned char ch) {
+            return !std::isspace(ch);
+        }).base(), line.end());
+        
+        if (!line.empty()) {
+            class_mapping[line] = class_id;
+            class_id++;
+        }
+    }
+    
+    file.close();
+    return class_mapping;
+}
+
+// Parse comma-separated class names and return their IDs
+std::vector<int> parseClassNames(const std::string& classes_str, const std::unordered_map<std::string, int>& class_mapping) {
+    std::vector<int> selected_classes;
+    
+    if (classes_str.empty()) {
+        return selected_classes;  // Empty vector means all classes selected
+    }
+    
+    std::stringstream ss(classes_str);
+    std::string class_name;
+    
+    while (std::getline(ss, class_name, ',')) {
+        // Remove leading and trailing whitespace
+        class_name.erase(0, class_name.find_first_not_of(" \t"));
+        class_name.erase(class_name.find_last_not_of(" \t") + 1);
+        
+        if (!class_name.empty()) {
+            auto it = class_mapping.find(class_name);
+            if (it != class_mapping.end()) {
+                selected_classes.push_back(it->second);
+                std::cout << "Selected class: " << class_name << " (ID: " << it->second << ")" << std::endl;
+            } else {
+                std::cerr << "Warning: Unknown class name '" << class_name << "', ignoring." << std::endl;
+            }
+        }
+    }
+    
+    return selected_classes;
+}
+
+// Check if a class ID is in the selected classes list
+bool isClassSelected(int class_id, const std::vector<int>& selected_classes) {
+    // If no classes specified, all classes are selected
+    if (selected_classes.empty()) {
+        return true;
+    }
+    
+    // Check if class_id is in the selected_classes vector
+    return std::find(selected_classes.begin(), selected_classes.end(), class_id) != selected_classes.end();
 }
