@@ -107,6 +107,19 @@ This extension allows four optional registry keys to be set to customize behavio
 
 [COCO Class Names](https://gist.github.com/AruniRC/7b3dadd004da04c80198557db5da4bda)
 
+### Deleting Registry Keys
+
+To remove a registry key override and revert to default behavior:
+
+```bash
+registry delete extension bsext-yolo-auto-start
+registry delete extension bsext-yolo-video-device  
+registry delete extension bsext-yolo-classes
+registry delete extension bsext-yolo-model-path
+```
+
+**Note**: This is particularly useful when a registry override points to an invalid path (e.g., a model path from a different environment) and you want to restore the default behavior.
+
 ## Selective Class Detection Feature
 
 This extension now supports selective class detection, allowing you to focus on specific object classes while maintaining complete detection data. This feature is useful for applications that only need to visualize or respond to certain types of objects.
@@ -298,14 +311,14 @@ tar -xzf brightsign-${BRIGHTSIGN_OS_VERSION}-src-oe.tar.gz
 rsync -av bsoe-recipes/ brightsign-oe/ 
 
 # Clean up disk space
-rm brightsign-${BRIGHTSIGN_OS_VERSION}-src-dl.tar.gz
-rm brightsign-${BRIGHTSIGN_OS_VERSION}-src-oe.tar.gz
+# rm brightsign-${BRIGHTSIGN_OS_VERSION}-src-dl.tar.gz
+# rm brightsign-${BRIGHTSIGN_OS_VERSION}-src-oe.tar.gz
 
 ```
 
 ___IMPORTANT___: Building an OpenEmbedded project can be very particular in terms of packages and setup. For that reason it __strongly recommended__ to use the [Docker build](https://github.com/brightsign/extension-template/blob/main/README.md#recommended-docker) approadh.
 
-```sh
+```sh {"terminalRows":"44"}
 # Build the SDK in Docker -- RECOMMENDED
 cd "${project_root:-.}"
 
@@ -505,7 +518,7 @@ cd "${project_root:-.}"
 source ./sdk/environment-setup-aarch64-oe-linux
 
 # this command can be used to clean old builds
-# rm -rf build_xt5
+rm -rf build_xt5
 
 mkdir -p build_xt5 && cd $_
 
@@ -547,7 +560,7 @@ cp sh/uninstall.sh install/ && chmod +x install/uninstall.sh
 cd "${project_root:-.}/install"
 
 # remove any old zip files
-#rm -f ../yolo-dev-*.zip
+rm -f ../yolo-dev-*.zip
 
 zip -r ../yolo-dev-$(date +%s).zip ./
 ```
@@ -661,7 +674,9 @@ cp /var/volatile/bsext/ext_npu_yolo/uninstall.sh /usr/local/
 ```
 
 ## UDP Debugging: Monitor Publications
+
 ### On OrangePI (Linux/x86):
+
 To monitor UDP messages published on port 5002, use:
 
 ```bash
@@ -669,6 +684,7 @@ nc -ul 5002
 ```
 
 ### On BrightSign Player:
+
 Use socat to listen for UDP messages:
 
 ```bash
