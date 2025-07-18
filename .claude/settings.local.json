@@ -26,7 +26,8 @@
       "Bash(/tmp/test_frame_writer_filtering:*)",
       "Bash(/tmp:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(true)"
     ],
     "deny": []
   }

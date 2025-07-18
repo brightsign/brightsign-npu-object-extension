@@ -407,6 +407,17 @@ cp examples/yolox/model/coco_80_labels_list.txt ../../install/RK3588/model/
 
 **The necessary binaries (model, libraries) are now in the `install` directory of the project**
 
+**IMPORTANT**:
+
+The classnames (`coco_80_labels_list.txt`) may have spaces. Setting these names with the Brightsign registry tool will not work. However, we can modify the class names to substitute '_' for the space.
+
+```sh
+cd "${project_root:-.}"/install/RK3588/model
+
+# change all the spaces in the labels to underscores
+sed -i 's/ /_/g' ./coco_80_labels_list.txt
+```
+
 ## (Optional) Step 2 - Build and test on Orange Pi
 
 While not required, it can be handy to move the project to an OrangePi (OPi) as this facilitates a more responsive build and debug process due to a fully linux distribution and native compiler. Consult the [Orange Pi Wiki](http://www.orangepi.org/orangepiwiki/index.php/Orange_Pi_5_Plus) for more information.
@@ -515,7 +526,7 @@ cd "${project_root:-.}"/install
 
 ../sh/make-extension-lvm
 # zip for convenience to transfer to player
-#rm -f ../yolo-demo-*.zip 
+rm -f ../yolo-demo-*.zip 
 zip ../yolo-demo-$(date +%s).zip ext_npu_yolo*
 # clean up
 rm -rf ext_npu_yolo*
