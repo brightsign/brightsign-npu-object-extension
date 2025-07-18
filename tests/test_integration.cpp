@@ -84,6 +84,7 @@ void test_publisherFormatters() {
     result.detections = detections;
     result.timestamp = std::chrono::system_clock::now();
     result.selected_classes = {0, 2};  // person, car
+    result.class_mapping = class_mapping;
     
     // Test SelectiveJsonMessageFormatter
     SelectiveJsonMessageFormatter json_formatter;
@@ -138,6 +139,7 @@ void test_frameWriterSelection() {
     result.detections = detections;
     result.timestamp = std::chrono::system_clock::now();
     result.selected_classes = {0};  // person only
+    result.class_mapping = class_mapping;
     
     // Test DecoratedFrameWriter
     DecoratedFrameWriter writer("/tmp/test_selective_output.jpg", false);
@@ -172,6 +174,7 @@ void test_backwardCompatibility() {
     result.detections = detections;
     result.timestamp = std::chrono::system_clock::now();
     result.selected_classes = {};  // Empty = all classes
+    result.class_mapping = class_mapping;
     
     // Test that formatters work with empty selection
     SelectiveJsonMessageFormatter json_formatter;

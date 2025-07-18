@@ -78,29 +78,31 @@ int main(int argc, char **argv) {
     
     // Parse class names if provided
     std::vector<int> selected_classes = {}; // Default to include class 0 (usually "person" in COCO)
+    std::unordered_map<std::string, int> class_mapping; // Class name to ID mapping
+
+    // Always load class mapping as it's needed for proper reporting
+    // Determine model directory to find labels file
+    std::string model_dir = std::filesystem::path(model_name).parent_path();
+    if (model_dir.empty()) {
+        model_dir = ".";
+    }
+    std::string labels_path = model_dir + "/coco_80_labels_list.txt";
+    
+    // Try alternative paths if not found
+    if (!std::filesystem::exists(labels_path)) {
+        labels_path = "model/coco_80_labels_list.txt";
+    }
+    if (!std::filesystem::exists(labels_path)) {
+        labels_path = "../model/coco_80_labels_list.txt";
+    }
+    
+    class_mapping = loadCocoClassMapping(labels_path);
+    if (class_mapping.empty()) {
+        printf("Error: Could not load COCO class mapping from %s\n", labels_path.c_str());
+        return -1;
+    }
 
     if (!classes_str.empty()) {
-        // Determine model directory to find labels file
-        std::string model_dir = std::filesystem::path(model_name).parent_path();
-        if (model_dir.empty()) {
-            model_dir = ".";
-        }
-        std::string labels_path = model_dir + "/coco_80_labels_list.txt";
-        
-        // Try alternative paths if not found
-        if (!std::filesystem::exists(labels_path)) {
-            labels_path = "model/coco_80_labels_list.txt";
-        }
-        if (!std::filesystem::exists(labels_path)) {
-            labels_path = "../model/coco_80_labels_list.txt";
-        }
-        
-        auto class_mapping = loadCocoClassMapping(labels_path);
-        if (class_mapping.empty()) {
-            printf("Error: Could not load COCO class mapping from %s\n", labels_path.c_str());
-            return -1;
-        }
-        
         selected_classes = parseClassNames(classes_str, class_mapping);
         if (selected_classes.empty() && !classes_str.empty()) {
             printf("Warning: No valid classes found in '%s', using all classes\n", classes_str.c_str());
@@ -135,7 +137,8 @@ int main(int argc, char **argv) {
             running,
             1, // Single frame
             frameWriter,
-            selected_classes);
+            selected_classes,
+            class_mapping);
         
         // Create formatters
         auto full_json_formatter = std::make_shared<FullJsonMessageFormatter>(suppress_empty);
@@ -168,7 +171,8 @@ int main(int argc, char **argv) {
             running,
             30,
             frameWriter,
-            selected_classes);
+            selected_classes,
+            class_mapping);
 
         // Create formatters
         auto full_json_formatter = std::make_shared<FullJsonMessageFormatter>(suppress_empty);

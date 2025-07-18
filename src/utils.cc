@@ -162,3 +162,14 @@ bool isClassSelected(int class_id, const std::vector<int>& selected_classes) {
     // Check if class_id is in the selected_classes vector
     return std::find(selected_classes.begin(), selected_classes.end(), class_id) != selected_classes.end();
 }
+
+// Get class name by its ID
+std::string getClassNameById(int class_id, const std::unordered_map<std::string, int>& class_mapping) {
+    // Find the class name that maps to this ID
+    for (const auto& [name, id] : class_mapping) {
+        if (id == class_id) {
+            return name;
+        }
+    }
+    return "unknown";  // Return "unknown" if class ID not found
+}

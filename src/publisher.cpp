@@ -12,9 +12,20 @@ std::string JsonMessageFormatter::formatMessage(const InferenceResult& result) {
     // Add timestamp
     j["timestamp"] = std::chrono::system_clock::to_time_t(result.timestamp);
     
-    // Count detections by class name for selected classes only
-    std::unordered_map<std::string, int> class_counts {{"person", 0}};
+    // Initialize counts for all selected classes to 0
+    std::unordered_map<std::string, int> class_counts;
+    if (result.selected_classes.empty()) {
+        // If no classes specified, initialize "person" as default
+        class_counts["person"] = 0;
+    } else {
+        // Initialize all selected classes with 0
+        for (int class_id : result.selected_classes) {
+            std::string class_name = getClassNameById(class_id, result.class_mapping);
+            class_counts[class_name] = 0;
+        }
+    }
     
+    // Count detections by class name for selected classes only
     for (int i = 0; i < result.detections.count; ++i) {
         const auto& detection = result.detections.results[i];
         
@@ -25,7 +36,9 @@ std::string JsonMessageFormatter::formatMessage(const InferenceResult& result) {
         }
         
         std::string class_name = std::string(detection.name);
-        class_counts[class_name]++;
+        if (class_counts.find(class_name) != class_counts.end()) {
+            class_counts[class_name]++;
+        }
     }
     
     // Add class counts to JSON
@@ -134,13 +147,27 @@ std::string SelectiveJsonMessageFormatter::formatMessage(const InferenceResult& 
     // Extract only selected class detections
     std::vector<object_detect_result> selected_detections = extractSelectedClasses(result);
     
-    // Count detections by class name for selected classes only
-    std::unordered_map<std::string, int> class_counts {{"person", 0}};
+    // Initialize counts for all selected classes to 0
+    std::unordered_map<std::string, int> class_counts;
+    if (result.selected_classes.empty()) {
+        // If no classes specified, initialize "person" as default
+        class_counts["person"] = 0;
+    } else {
+        // Initialize all selected classes with 0
+        for (int class_id : result.selected_classes) {
+            std::string class_name = getClassNameById(class_id, result.class_mapping);
+            std::string mapped_name = mapClassName(class_name);
+            class_counts[mapped_name] = 0;
+        }
+    }
     
+    // Count detections by class name for selected classes only
     for (const auto& detection : selected_detections) {
         std::string class_name = std::string(detection.name);
         std::string mapped_name = mapClassName(class_name);
-        class_counts[mapped_name]++;
+        if (class_counts.find(mapped_name) != class_counts.end()) {
+            class_counts[mapped_name]++;
+        }
     }
     
     // Add class counts to JSON
@@ -156,13 +183,27 @@ std::string SelectiveBSMessageFormatter::formatMessage(const InferenceResult& re
     // Extract only selected class detections
     std::vector<object_detect_result> selected_detections = extractSelectedClasses(result);
     
-    // Count detections by class name for selected classes only, always include person
-    std::unordered_map<std::string, int> class_counts{{"person", 0}};
+    // Initialize counts for all selected classes to 0
+    std::unordered_map<std::string, int> class_counts;
+    if (result.selected_classes.empty()) {
+        // If no classes specified, initialize "person" as default
+        class_counts["person"] = 0;
+    } else {
+        // Initialize all selected classes with 0
+        for (int class_id : result.selected_classes) {
+            std::string class_name = getClassNameById(class_id, result.class_mapping);
+            std::string mapped_name = mapClassName(class_name);
+            class_counts[mapped_name] = 0;
+        }
+    }
     
+    // Count detections by class name for selected classes only
     for (const auto& detection : selected_detections) {
         std::string class_name = std::string(detection.name);
         std::string mapped_name = mapClassName(class_name);
-        class_counts[mapped_name]++;
+        if (class_counts.find(mapped_name) != class_counts.end()) {
+            class_counts[mapped_name]++;
+        }
     }
     
     // Build BrightScript format message

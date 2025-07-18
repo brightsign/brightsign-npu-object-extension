@@ -14,5 +14,6 @@ void moveDirectoryFiles(const std::string& sourceDir, const std::string& destina
 std::unordered_map<std::string, int> loadCocoClassMapping(const std::string& labels_file_path);
 std::vector<int> parseClassNames(const std::string& classes_str, const std::unordered_map<std::string, int>& class_mapping);
 bool isClassSelected(int class_id, const std::vector<int>& selected_classes);
+std::string getClassNameById(int class_id, const std::unordered_map<std::string, int>& class_mapping);
 
 #endif // UTILS_H
