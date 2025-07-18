@@ -218,6 +218,52 @@ void Publisher::operator()() {
     }
 }
 
+// Implementation of the FullJsonMessageFormatter
+std::string FullJsonMessageFormatter::formatMessage(const InferenceResult& result) {
+    json j;
+    
+    // Add timestamp
+    j["timestamp"] = std::chrono::system_clock::to_time_t(result.timestamp);
+    
+    // Create detections array
+    json detections = json::array();
+    
+    for (int i = 0; i < result.detections.count; ++i) {
+        const auto& detection = result.detections.results[i];
+        
+        // Skip invalid detections or if not in selected classes
+        if ((detection.prop <= 0.0f || detection.cls_id < 0) || 
+            !isClassSelected(detection.cls_id, result.selected_classes)) {
+            continue;
+        }
+        
+        // Create detection object with all details
+        json det;
+        det["class_id"] = detection.cls_id;
+        det["class_name"] = std::string(detection.name);
+        det["confidence"] = detection.prop;
+        det["bbox"] = {
+            {"left", detection.box.left},
+            {"top", detection.box.top},
+            {"right", detection.box.right},
+            {"bottom", detection.box.bottom}
+        };
+        
+        detections.push_back(det);
+    }
+    
+    // Add detections array to JSON
+    j["detections"] = detections;
+    j["detection_count"] = detections.size();
+    
+    // Handle suppress_empty flag
+    if (suppress_empty && detections.empty()) {
+        return "";
+    }
+    
+    return j.dump();
+}
+
 // UDPPublisher backward compatibility wrapper
 UDPPublisher::UDPPublisher(
         const std::string& ip,

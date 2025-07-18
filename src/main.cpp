@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
             selected_classes);
         
         // Create formatters
-        auto json_formatter = std::make_shared<JsonMessageFormatter>(suppress_empty);
+        auto full_json_formatter = std::make_shared<FullJsonMessageFormatter>(suppress_empty);
         
         // Create file publisher using transport injection
         auto file_transport = std::make_shared<FileTransport>("/tmp/results.json");
@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
             file_transport,
             resultQueue,
             running,
-            json_formatter,
+            full_json_formatter,
             1);
         
         // Run single inference and exit
@@ -171,7 +171,7 @@ int main(int argc, char **argv) {
             selected_classes);
 
         // Create formatters
-        auto json_formatter = std::make_shared<JsonMessageFormatter>(suppress_empty);
+        auto full_json_formatter = std::make_shared<FullJsonMessageFormatter>(suppress_empty);
         auto selective_json_formatter = std::make_shared<SelectiveJsonMessageFormatter>();
         auto selective_bs_formatter = std::make_shared<SelectiveBSMessageFormatter>();
         
@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
             file_transport,
             resultQueue,
             running,
-            json_formatter,
+            full_json_formatter,
             1); // Write to file once per second
 
         // Create UDP publishers for selective class data

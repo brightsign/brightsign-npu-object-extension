@@ -25,7 +25,8 @@
       "Bash(/tmp/test_refactored_publishers:*)",
       "Bash(/tmp/test_frame_writer_filtering:*)",
       "Bash(/tmp:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": []
   }

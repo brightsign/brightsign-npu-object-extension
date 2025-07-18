@@ -87,6 +87,17 @@ public:
     std::string formatMessage(const InferenceResult& result) override;
 };
 
+// Concrete implementation for full JSON format
+// Outputs all detection details including bounding boxes, confidence scores, etc.
+class FullJsonMessageFormatter : public MessageFormatter {
+private:
+    bool suppress_empty;
+    
+public:
+    explicit FullJsonMessageFormatter(bool suppress_empty = false) : suppress_empty(suppress_empty) {}
+    std::string formatMessage(const InferenceResult& result) override;
+};
+
 
 // Generic publisher class using transport injection
 class Publisher {

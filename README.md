@@ -100,61 +100,35 @@ This extension allows four optional registry keys to be set to customize behavio
 
 | Registry Key | Values | Effect |
 | --- | --- | --- |
-| `bsext-yolo-auto-start` | `true` or `false` | when truthy, disables the extension from autostart (`bsext_init start` will simply return). The extension can still be manually run with `bsext_init run` |
+| `bsext-yolo-disable-auto-start` | `true` or `false` | when truthy, disables the extension from autostart (`bsext_init start` will simply return). The extension can still be manually run with `bsext_init run` |
 | `bsext-yolo-video-device` | a valid v4l device file name like `/dev/video0` or `/dev/video1` | normally not needed, but may be useful to override for some unusual or test condition |
-| `bsext-yolo-classes` | comma-separated list of COCO class names like `person,car,dog` | __NEW__: filters visual output and UDP messages to only show selected classes. Complete detection data is still preserved in `/tmp/results.json` |
 | `bsext-yolo-model-path` | full path to a `.rknn` model file | allows using custom YOLO models (YOLO Simplified or YOLOX) instead of the default model |
+| `bsext-yolo-classes` | comma-separated list of COCO class names like `person,car,dog` | __filters__ visual output and UDP messages to only show selected classes. Complete detection data is still preserved in `/tmp/results.json` |
 
 [COCO Class Names](https://gist.github.com/AruniRC/7b3dadd004da04c80198557db5da4bda)
 
-### Deleting Registry Keys
+#### Working with the Registry
+
+The Registry can be manipulated via the Diagnostic Web Server (DWS) or the command shell on the player.
+
+To set a registry key, go to the Registry Tab on DWS, and type the set commands in the command box and hit submit.  You can also view the entire registry on that tab.
+
+**NOTE** the player must restart before registry changes are effective.
+
+```bash
+registry write extension bsext-yolo-disable-auto-start True
+```
 
 To remove a registry key override and revert to default behavior:
 
 ```bash
-registry delete extension bsext-yolo-auto-start
+registry delete extension bsext-yolo-disable-auto-start
 registry delete extension bsext-yolo-video-device  
 registry delete extension bsext-yolo-classes
 registry delete extension bsext-yolo-model-path
 ```
 
 **Note**: This is particularly useful when a registry override points to an invalid path (e.g., a model path from a different environment) and you want to restore the default behavior.
-
-## Selective Class Detection Feature
-
-This extension now supports selective class detection, allowing you to focus on specific object classes while maintaining complete detection data. This feature is useful for applications that only need to visualize or respond to certain types of objects.
-
-### How It Works
-
-- **Complete Detection**: The model always processes all objects in the scene
-- **Selective Display**: Only selected classes are shown in the decorated output image (`/tmp/output.jpg`)
-- **Selective UDP**: Only selected classes are counted and sent via UDP to ports 5002 and 5000
-- **Complete Results**: All detections are preserved in `/tmp/results.json` regardless of selection
-
-### Usage Methods
-
-#### 1. Registry-Based Configuration (Recommended for Production)
-
-```bash
-# Set the registry key to select classes
-registry extension bsext-yolo-classes "person,car,dog"
-
-# Start or restart the extension
-./bsext_init restart
-```
-
-#### 2. Command Line Override (Useful for Testing)
-
-```bash
-# Direct command line usage
-./yolo_demo model/yolov8n.rknn /dev/video0 --classes person,car
-
-# Single image processing with class selection
-./yolo_demo model/yolov8n.rknn /tmp/input.jpg --classes person,bicycle,car
-
-# Combined with other options
-./yolo_demo model/yolov8n.rknn /dev/video0 --suppress-empty --classes person
-```
 
 ### Supported COCO Classes
 
@@ -170,43 +144,10 @@ The extension supports all 80 COCO classes. Some common examples:
 
 For the complete list of 80 supported classes, see `model/coco_80_labels_list.txt`.
 
-### Output Behavior Examples
-
-#### Example 1: Person Detection Only
-
-```bash
-# Configuration
-registry extension bsext-yolo-classes "person"
-
-# Results:
-# - /tmp/output.jpg: Shows bounding boxes only around people
-# - /tmp/results.json: Contains ALL objects (person, car, dog, etc.)
-# - UDP Port 5002: {"person": 3, "timestamp": 1234567890}
-# - UDP Port 5000: "person:3!!timestamp:1234567890"
-```
-
-#### Example 2: Vehicle Detection
-
-```bash
-# Configuration  
-registry extension bsext-yolo-classes "car,truck,bus,motorcycle"
-
-# Results:
-# - /tmp/output.jpg: Shows bounding boxes only around vehicles
-# - /tmp/results.json: Contains ALL objects detected in scene
-# - UDP Port 5002: {"car": 2, "truck": 1, "timestamp": 1234567890}
-# - UDP Port 5000: "car:2!!truck:1!!timestamp:1234567890"
-```
-
-#### Example 3: Default Behavior (All Classes)
-
-```bash
-# Configuration: No registry key set, or empty value
-# Results:
-# - /tmp/output.jpg: Shows bounding boxes around ALL detected objects
-# - /tmp/results.json: Contains ALL objects detected in scene
-# - UDP messages: Include counts for all detected classes
-```
+- **Complete Detection**: The model always processes all objects in the scene
+- **Selective Display**: Only selected classes are shown in the decorated output image (`/tmp/output.jpg`)
+- **Selective UDP**: Only selected classes are counted and sent via UDP to ports 5002 and 5000
+- **Complete Results**: All detections are preserved in `/tmp/results.json` regardless of selection
 
 ### Error Handling
 
