@@ -5,10 +5,13 @@
 #include <cstring>
 
 void DecoratedFrameWriter::writeFrame(cv::Mat& frame, const InferenceResult& result) {
-    // Check if we have any valid detections (score > 0 and class_id >= 0) that are also selected
+    // Use confidence threshold from the result
+    float threshold = result.confidence_threshold;
+    
+    // Check if we have any valid high-confidence detections that are also selected
     int valid_detections = 0;
     for (int i = 0; i < result.detections.count; i++) {
-        if (result.detections.results[i].prop > 0.0f && 
+        if (result.detections.results[i].prop > threshold && 
             result.detections.results[i].cls_id >= 0 &&
             isClassSelected(result.detections.results[i].cls_id, result.selected_classes)) {
             valid_detections++;
@@ -49,7 +52,13 @@ void DecoratedFrameWriter::writeFrame(cv::Mat& frame, const InferenceResult& res
                     continue;
                 }
                 
-                auto color = cv::Scalar(0, 255, 0);  // green for detected objects
+                // Choose color based on confidence threshold
+                cv::Scalar color;
+                if (detection.prop >= threshold) {
+                    color = cv::Scalar(0, 255, 0);  // Green for high confidence
+                } else {
+                    color = cv::Scalar(128, 128, 128);  // 50% gray for low confidence
+                }
                 auto& box = detection.box;
                 
                 // Validate box coordinates

@@ -50,7 +50,7 @@ typedef struct object_detect_result_list {
 
 int init_yolo_model(const char *model_path, rknn_app_context_t *app_ctx);
 int release_yolo_model(rknn_app_context_t *app_ctx);
-int inference_yolo_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results);
+int inference_yolo_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold = BOX_THRESH);
 
 // Model type detection function
 yolo_model_type_t detect_yolo_model_type(rknn_app_context_t *app_ctx);

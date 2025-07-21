@@ -100,6 +100,17 @@ get_selected_classes() {
     fi
 }
 
+get_confidence_threshold() {
+    # check registry for confidence threshold
+    # allows user to override the default confidence threshold
+    reg_confidence_threshold=$(registry extension ${DAEMON_NAME}-confidence-threshold)
+    if [ -n "${reg_confidence_threshold}" ]; then
+        echo "${reg_confidence_threshold}"
+    else
+        echo ""  # Empty string means use default
+    fi
+}
+
 
 # Common function to run the attention demo
 run_yolo_demo() {
@@ -116,10 +127,15 @@ run_yolo_demo() {
     SELECTED_CLASSES=$(get_selected_classes)
     if [ -n "${SELECTED_CLASSES}" ]; then
         CMD_ARGS="${CMD_ARGS} --classes ${SELECTED_CLASSES}"
-        echo "Using Model, Device, and Classes: ${CMD_ARGS}"
-    else
-        echo "Using Model and Device: ${CMD_ARGS}"
     fi
+    
+    # Add confidence threshold parameter if specified
+    CONFIDENCE_THRESHOLD=$(get_confidence_threshold)
+    if [ -n "${CONFIDENCE_THRESHOLD}" ]; then
+        CMD_ARGS="${CMD_ARGS} --confidence-threshold ${CONFIDENCE_THRESHOLD}"
+    fi
+    
+    echo "Using arguments: ${CMD_ARGS}"
     
     # Default to running in foreground
     local background=$1

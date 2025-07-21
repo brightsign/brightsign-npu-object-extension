@@ -29,8 +29,8 @@ std::string JsonMessageFormatter::formatMessage(const InferenceResult& result) {
     for (int i = 0; i < result.detections.count; ++i) {
         const auto& detection = result.detections.results[i];
         
-        // Skip invalid detections or if not in selected classes
-        if ((detection.prop <= 0.0f ||  detection.cls_id < 0) || 
+        // Skip invalid detections, below threshold, or if not in selected classes
+        if ((detection.prop <= 0.0f ||  detection.cls_id < 0 || detection.prop < result.confidence_threshold) || 
             !isClassSelected(detection.cls_id, result.selected_classes)) {
             continue;
         }
@@ -56,8 +56,8 @@ std::vector<object_detect_result> MappedMessageFormatter::extractSelectedClasses
     for (int i = 0; i < result.detections.count; ++i) {
         const auto& detection = result.detections.results[i];
         
-        // Skip invalid detections
-        if (detection.prop <= 0.0f || detection.cls_id < 0) {
+        // Skip invalid detections or below threshold
+        if (detection.prop <= 0.0f || detection.cls_id < 0 || detection.prop < result.confidence_threshold) {
             continue;
         }
         
@@ -80,9 +80,18 @@ std::string MappedMessageFormatter::mapClassName(const std::string& original_nam
 
 // Implementation of the BSVariableMessageFormatter
 std::string BSVariableMessageFormatter::formatMessage(const InferenceResult& result) {
+    // Count high-confidence detections
+    int valid_count = 0;
+    for (int i = 0; i < result.detections.count; ++i) {
+        const auto& detection = result.detections.results[i];
+        if (detection.prop >= result.confidence_threshold && detection.prop > 0.0f && detection.cls_id >= 0) {
+            valid_count++;
+        }
+    }
+    
     // format the message as a string like detection_count:2!!timestamp:1746732409
     std::string message = 
-        "detection_count:" + std::to_string(result.detections.count) + "!!" +
+        "detection_count:" + std::to_string(valid_count) + "!!" +
         "timestamp:" + std::to_string(std::chrono::system_clock::to_time_t(result.timestamp));
     return message;
 }
@@ -100,7 +109,7 @@ std::string FacesJsonMessageFormatter::formatMessage(const InferenceResult& resu
     int people_count = 0;
     for (int i = 0; i < result.detections.count; ++i) {
         const auto& detection = result.detections.results[i];
-        if (detection.cls_id == 0) { // "person" class
+        if (detection.cls_id == 0 && detection.prop >= result.confidence_threshold) { // "person" class above threshold
             people_count++;
         }
     }
@@ -124,7 +133,7 @@ std::string FacesBSMessageFormatter::formatMessage(const InferenceResult& result
     int people_count = 0;
     for (int i = 0; i < result.detections.count; ++i) {
         const auto& detection = result.detections.results[i];
-        if (detection.cls_id == 0) { // "person" class
+        if (detection.cls_id == 0 && detection.prop >= result.confidence_threshold) { // "person" class above threshold
             people_count++;
         }
     }

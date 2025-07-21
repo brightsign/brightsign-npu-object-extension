@@ -40,12 +40,14 @@ int main(int argc, char **argv) {
     bool suppress_empty = false;
     bool is_file_input = false;
     std::string classes_str;
+    float confidence_threshold = 0.3f; // Default confidence threshold
     
     if (argc < 3) {
-        printf("Usage: %s <rknn model> <source> [--suppress-empty] [--classes class1,class2,...]\n", argv[0]);
+        printf("Usage: %s <rknn model> <source> [--suppress-empty] [--classes class1,class2,...] [--confidence-threshold value]\n", argv[0]);
         printf("  <source>: V4L device (e.g. /dev/video0) or image file (e.g. /tmp/bus.jpg)\n");
         printf("  --suppress-empty: suppress output when no detections (optional)\n");
         printf("  --classes: comma-separated list of class names to detect (optional)\n");
+        printf("  --confidence-threshold: confidence threshold for detections (0.0-1.0, default: 0.3)\n");
         return -1;
     }
 
@@ -65,6 +67,25 @@ int main(int argc, char **argv) {
                 i++;  // Skip the next argument as it's the classes string
             } else {
                 printf("Error: --classes flag requires a value\n");
+                return -1;
+            }
+        } else if (strcmp(argv[i], "--confidence-threshold") == 0) {
+            if (i + 1 < argc) {
+                try {
+                    confidence_threshold = std::stof(argv[i + 1]);
+                    // Validate range
+                    if (confidence_threshold < 0.0f || confidence_threshold > 1.0f) {
+                        printf("Error: confidence threshold must be between 0.0 and 1.0\n");
+                        return -1;
+                    }
+                    printf("Confidence threshold set to: %.2f\n", confidence_threshold);
+                    i++;  // Skip the next argument as it's the threshold value
+                } catch (const std::exception& e) {
+                    printf("Error: invalid confidence threshold value '%s'\n", argv[i + 1]);
+                    return -1;
+                }
+            } else {
+                printf("Error: --confidence-threshold flag requires a value\n");
                 return -1;
             }
         } else {
@@ -138,7 +159,8 @@ int main(int argc, char **argv) {
             1, // Single frame
             frameWriter,
             selected_classes,
-            class_mapping);
+            class_mapping,
+            confidence_threshold);
         
         // Create formatters
         auto full_json_formatter = std::make_shared<FullJsonMessageFormatter>(suppress_empty);
@@ -172,7 +194,8 @@ int main(int argc, char **argv) {
             30,
             frameWriter,
             selected_classes,
-            class_mapping);
+            class_mapping,
+            confidence_threshold);
 
         // Create formatters
         auto full_json_formatter = std::make_shared<FullJsonMessageFormatter>(suppress_empty);

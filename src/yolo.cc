@@ -223,14 +223,14 @@ int release_yolo_model(rknn_app_context_t *app_ctx)
     return 0;
 }
 
-int inference_yolo_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results) {
+int inference_yolo_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold) {
     int ret;
     image_buffer_t dst_img;
     letterbox_t letter_box;
     rknn_input inputs[app_ctx->io_num.n_input];
     rknn_output outputs[app_ctx->io_num.n_output];
     const float nms_threshold = NMS_THRESH;      // Default NMS threshold
-    const float box_conf_threshold = BOX_THRESH; // Default confidence threshold
+    const float box_conf_threshold = 0.1f; // Use lower threshold to preserve more detections for visual feedback
     int bg_color = 114;  // Default letterbox background color for YOLO models
     
     if ((!app_ctx) || !(img) || (!od_results)) {

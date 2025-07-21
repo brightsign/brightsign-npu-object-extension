@@ -26,6 +26,7 @@ struct InferenceResult {
     std::chrono::system_clock::time_point timestamp;
     std::vector<int> selected_classes;  // Selected class IDs for filtering
     std::unordered_map<std::string, int> class_mapping;  // Class name to ID mapping
+    float confidence_threshold;  // Confidence threshold used for this inference
 };
 
 
@@ -40,6 +41,7 @@ private:
     std::shared_ptr<FrameWriter> frameWriter;
     std::vector<int> selected_classes;  // Selected class IDs for filtering
     std::unordered_map<std::string, int> class_mapping;  // Class name to ID mapping
+    float confidence_threshold;  // Confidence threshold for detections
     
     // Simulated ML model inference
     InferenceResult runInference(cv::Mat& img);
@@ -53,7 +55,8 @@ public:
         int target_fps,
         std::shared_ptr<FrameWriter> writer = nullptr,
         const std::vector<int>& selected_classes = {},
-        const std::unordered_map<std::string, int>& class_mapping = {});
+        const std::unordered_map<std::string, int>& class_mapping = {},
+        float confidence_threshold = 0.3f);
     ~MLInferenceThread(); // Destructor declaration
     void operator()();
     void runSingleInference(); // Single-shot inference for file input

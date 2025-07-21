@@ -27,7 +27,7 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
         printf("Error: Empty input image passed to runInference\n");
         object_detect_result_list empty_results;
         memset(&empty_results, 0, sizeof(empty_results));
-        return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping};
+        return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
     }
     
     // Ensure the image has the right format
@@ -41,7 +41,7 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
             printf("Error: Unsupported channel count: %d\n", cap.channels());
             object_detect_result_list empty_results;
             memset(&empty_results, 0, sizeof(empty_results));
-            return InferenceResult{empty_results, std::chrono::system_clock::now()};
+            return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
         }
     }
     
@@ -53,18 +53,18 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
         printf("Exception in cv_to_image_buffer: %s\n", e.what());
         object_detect_result_list empty_results;
         memset(&empty_results, 0, sizeof(empty_results));
-        return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping};
+        return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
     }
 
     object_detect_result_list empty_results;
     memset(&empty_results, 0, sizeof(empty_results));
-    InferenceResult final_result{empty_results, std::chrono::system_clock::now(), selected_classes};
+    InferenceResult final_result{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
 
     printf("calling inference_yolo_model\n");
     object_detect_result_list results;
     memset(&results, 0, sizeof(results));  // Initialize results to avoid uninitialized data
     
-    int ret = inference_yolo_model(rknn_app_ctx.get(), &image, &results);
+    int ret = inference_yolo_model(rknn_app_ctx.get(), &image, &results, confidence_threshold);
     if (ret != 0) {
         printf("inference_yolo_model fail! ret=%d\n", ret);
         return final_result;
@@ -75,6 +75,7 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
     final_result.timestamp = std::chrono::system_clock::now();
     final_result.selected_classes = selected_classes;  // Pass selected classes along
     final_result.class_mapping = class_mapping;  // Pass class mapping along
+    final_result.confidence_threshold = confidence_threshold;  // Pass confidence threshold along
     printf("inference_yolo_model success! count=%d\n", results.count);
 
     frames++;
@@ -90,9 +91,10 @@ MLInferenceThread::MLInferenceThread(
         int target_fps,
         std::shared_ptr<FrameWriter> writer,
         const std::vector<int>& selected_classes,
-        const std::unordered_map<std::string, int>& class_mapping)
+        const std::unordered_map<std::string, int>& class_mapping,
+        float confidence_threshold)
     : resultQueue(queue), running(isRunning), target_fps(target_fps), frameWriter(writer), 
-      selected_classes(selected_classes), class_mapping(class_mapping) {
+      selected_classes(selected_classes), class_mapping(class_mapping), confidence_threshold(confidence_threshold) {
     
     // Store pointer to source name (argv remains valid)
     this->source_name = source_name;

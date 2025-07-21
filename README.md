@@ -89,12 +89,13 @@ When provided with an image file path (e.g., `/tmp/input.jpg`), the extension:
 
 ### Extension Control
 
-This extension allows four optional registry keys to be set to customize behavior:
+This extension allows five optional registry keys to be set to customize behavior:
 
 * Disable the auto-start of the extension -- this can be useful in debugging or other problems
 * Set the `v4l` device filename to override the auto-discovered device
 * Set a custom model path to use different YOLO models
 * **NEW**: Select specific object classes for visual display and UDP output
+* **NEW**: Set confidence threshold to reduce false positive detections
 
 **Registry keys are organized in the `extension` section**
 
@@ -104,6 +105,7 @@ This extension allows four optional registry keys to be set to customize behavio
 | `bsext-yolo-video-device` | a valid v4l device file name like `/dev/video0` or `/dev/video1` | normally not needed, but may be useful to override for some unusual or test condition |
 | `bsext-yolo-model-path` | full path to a `.rknn` model file | allows using custom YOLO models (YOLO Simplified or YOLOX) instead of the default model |
 | `bsext-yolo-classes` | comma-separated list of COCO class names like `person,car,dog` | __filters__ visual output and UDP messages to only show selected classes. Complete detection data is still preserved in `/tmp/results.json` |
+| `bsext-yolo-confidence-threshold` | float value between `0.0` and `1.0` (default: `0.3`) | sets the minimum confidence threshold for object detections. Higher values reduce false positives but may miss some valid detections |
 
 [COCO Class Names](https://gist.github.com/AruniRC/7b3dadd004da04c80198557db5da4bda)
 
@@ -126,9 +128,34 @@ registry delete extension bsext-yolo-disable-auto-start
 registry delete extension bsext-yolo-video-device  
 registry delete extension bsext-yolo-classes
 registry delete extension bsext-yolo-model-path
+registry delete extension bsext-yolo-confidence-threshold
 ```
 
 **Note**: This is particularly useful when a registry override points to an invalid path (e.g., a model path from a different environment) and you want to restore the default behavior.
+
+### Command Line Usage
+
+When running the application directly (e.g., for testing or via `bsext_init run`), you can use command line arguments:
+
+```bash
+./yolo_demo <model_path> <source> [--suppress-empty] [--classes class1,class2,...] [--confidence-threshold value]
+```
+
+**Arguments:**
+
+- `<model_path>`: Path to the RKNN model file
+- `<source>`: Either a V4L device (e.g., `/dev/video0`) or image file path
+- `--suppress-empty`: (Optional) Suppress output when no detections are made
+- `--classes`: (Optional) Comma-separated list of class names to detect (e.g., `person,car,dog`)
+- `--confidence-threshold`: (Optional) Set confidence threshold for detections (0.0-1.0, default: 0.3)
+
+**Example:**
+
+```bash
+./yolo_demo model/yolox_s.rknn /dev/video0 --classes person,car --confidence-threshold 0.5
+```
+
+__Note:__ When using the extension via `bsext_init`, registry values take precedence over command line defaults.
 
 ### Supported COCO Classes
 
