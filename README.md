@@ -16,13 +16,13 @@ BSMP are delivered as an BrightSign OS (BOS) "extension." Extensions are deliver
 
 ## Supported Players
 
-| player | minimum OS Version required |
-| --- | --- |
-| XT-5: XT1145, XT2145 | [9.1.52](https://brightsignbiz.s3.amazonaws.com/firmware/xd5/9.1/9.1.52/brightsign-xd5-update-9.1.52.zip) |
-| _Firebird_ | [BETA-9.1.52](https://bsnbuilds.s3.us-east-1.amazonaws.com/firmware/brightsign-demos/9.1.52-BETA/BETA-cobra-9.1.52-update.bsfw) |
-| _LS-5: LS445_ | [BETA-9.1.52](https://bsnbuilds.s3.us-east-1.amazonaws.com/firmware/brightsign-demos/9.1.52-BETA/BETA-cobra-9.1.52-update.bsfw) |
+| Player | Platform | SOC | Minimum OS Version |
+| --- | --- | --- | --- |
+| XT-5: XT1145, XT2145 | Series 5 | RK3588 | [9.1.52](https://brightsignbiz.s3.amazonaws.com/firmware/xd5/9.1/9.1.52/brightsign-xd5-update-9.1.52.zip) |
+| _Firebird_ | Development | RK3576 | [BETA-9.1.52](https://bsnbuilds.s3.us-east-1.amazonaws.com/firmware/brightsign-demos/9.1.52-BETA/BETA-cobra-9.1.52-update.bsfw) |
+| LS-5: LS445 | Series 5 | RK3568 | [BETA-9.1.52](https://bsnbuilds.s3.us-east-1.amazonaws.com/firmware/brightsign-demos/9.1.52-BETA/BETA-cobra-9.1.52-update.bsfw) |
 
-**NOTE-** This guide is written **ONLY** for the XT-5. Supporting Firebird or LS-5 is a straightforward exercise for the motivated reader.
+**All supported platforms** can be built using the instructions in this guide. The extension automatically detects the target platform at runtime.
 
 ## Supported Cameras
 
@@ -31,6 +31,8 @@ In general, any camera supported by Linux *should* work.  We've had great luck w
 ## Decorated Camera Output
 
 Every frame of video captured is processed through the model. By default, every detected object has a bounding box drawn around it. With the selective class detection feature, you can choose to display only specific object classes while still preserving complete detection data. The decorated image is written to `/tmp/output.jpg` on the RAM disk to avoid impacting storage life.
+
+A global confidence threshold is applied to all object detections.  For objects above this threshold, a _green_ bounding box is drawn whereas a _gray_ box is drawn for objects below the threshold.  See below for information about adjusting the threshold.
 
 ## Supported YOLO Models
 
@@ -54,9 +56,9 @@ The system automatically detects the model type based on output tensor structure
 
 This repository gives the steps and tools to:
 
-1. Compile ONNX formatted models for use on the Rockchip RK3588 SoC -- used in the OrangePi 5 and XT-5 Player.
-2. Develop and test an AI Application to load and run the model on the RK3588.
-3. Build the AI Application for BrightSign OS
+1. Compile ONNX formatted models for use on Rockchip NPUs (RK3588, RK3576, RK3568) -- used in BrightSign Series 5 players and development boards like OrangePi 5.
+2. Develop and test an AI Application to load and run the model on the Rockchip NPUs.
+3. Build the AI Application for BrightSign OS across multiple platforms
 4. Package the Application and model as a BrightSign Extension
 
 This project supports both YOLO Simplified and YOLOX models from the [Rockchip Model Zoo](https://github.com/airockchip/rknn_model_zoo). The application code in this repo was adapted from the example code from the Rockchip Model Zoo. Please ensure that you are aware of the license that your chosen model is released under. More information on model licenses can be seen [here](./model-licenses.md).
@@ -194,7 +196,7 @@ This repository describes building the project in these major steps:
 
 1. Compile the ONNX formatted model into _RKNN_ format for the Rockchip NPU
 2. Building and testing the model and application code on an [Orange Pi 5 Plus](http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/service-and-support/Orange-Pi-5-plus.html). ___NB__-_ this is optional, but is included as a guide to developing other applications
-3. Building and testing the model and application code on a [BrightSign XT-5 Player](https://www.brightsign.biz/brightsign-players/series-5/xt5/)
+3. Building and testing the model and application code on BrightSign Series 5 players (XT-5, Firebird, LS-5)
 4. Packaging the application and model as a BrightSign Extension
 
 __IMPORTANT: THE TOOLCHAIN REFERENCED BY THIS PROJECT REQUIRES A DEVELOPMENT HOST WITH x86_64 (aka AMD64) INSTRUCTION SET ARCHITECTURE.__ This means that many common dev hosts such as Macs with Apple Silicon or ARM-based Windows and Linux computers __WILL NOT WORK.__  That also includes the OrangePi5Plus (OPi) as it is ARM-based. The OPi ___can___ be used to develop the application with good effect, but the model compilation and final build for BrigthSign OS (BSOS) ___must___ be performed on an x86_64 host.
@@ -412,38 +414,57 @@ popd
 Compile the models. Note the options for various SoCs.
 
 ```sh
-# Compile YOLO Simplified for RK3588 -- XT-5 players
 cd "${project_root:-.}"/toolkit/rknn_model_zoo/
 
-mkdir -p examples/yolov8/model/RK3588
+# Compile for RK3588 -- XT-5 players
+mkdir -p examples/yolov8/model/RK3588 examples/yolox/model/RK3588
+
+# YOLO Simplified (YOLOv8) for RK3588
 docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
     -c "cd /zoo/examples/yolov8/python && python convert.py ../model/yolov8n.onnx rk3588 i8 ../model/RK3588/yolov8n.rknn"
 
-# Compile YOLOX for RK3588 -- XT-5 players  
-mkdir -p examples/yolox/model/RK3588
+# YOLOX for RK3588
 docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
     -c "cd /zoo/examples/yolox/python && python convert.py ../model/yolox_s.onnx rk3588 i8 ../model/RK3588/yolox_s.rknn"
 
-# Copy models and labels to install directory
-mkdir -p ../../install/RK3588/model
-cp examples/yolov8/model/RK3588/yolov8n.rknn ../../install/RK3588/model/
-cp examples/yolox/model/RK3588/yolox_s.rknn ../../install/RK3588/model/
-# copy the labels (both models use COCO labels)
-cp examples/yolox/model/coco_80_labels_list.txt ../../install/RK3588/model/
+# Compile for RK3576 -- Firebird players
+mkdir -p examples/yolov8/model/RK3576 examples/yolox/model/RK3576
+
+# YOLO Simplified (YOLOv8) for RK3576
+docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
+    -c "cd /zoo/examples/yolov8/python && python convert.py ../model/yolov8n.onnx rk3576 i8 ../model/RK3576/yolov8n.rknn"
+
+# YOLOX for RK3576
+docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
+    -c "cd /zoo/examples/yolox/python && python convert.py ../model/yolox_s.onnx rk3576 i8 ../model/RK3576/yolox_s.rknn"
+
+# Compile for RK3568 -- LS-5 players
+mkdir -p examples/yolov8/model/RK3568 examples/yolox/model/RK3568
+
+# YOLO Simplified (YOLOv8) for RK3568
+docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
+    -c "cd /zoo/examples/yolov8/python && python convert.py ../model/yolov8n.onnx rk3568 i8 ../model/RK3568/yolov8n.rknn"
+
+# YOLOX for RK3568
+docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
+    -c "cd /zoo/examples/yolox/python && python convert.py ../model/yolox_s.onnx rk3568 i8 ../model/RK3568/yolox_s.rknn"
+
+# Copy models and labels to install directories for all platforms
+for SOC in RK3588 RK3576 RK3568; do
+    mkdir -p ../../install/${SOC}/model
+    cp examples/yolov8/model/${SOC}/yolov8n.rknn ../../install/${SOC}/model/
+    cp examples/yolox/model/${SOC}/yolox_s.rknn ../../install/${SOC}/model/
+    # Copy the labels (both models use COCO labels) and convert spaces to underscores
+    cp examples/yolox/model/coco_80_labels_list.txt ../../install/${SOC}/model/
+    sed -i 's/ /_/g' ../../install/${SOC}/model/coco_80_labels_list.txt
+done
 ```
 
 **The necessary binaries (model, libraries) are now in the `install` directory of the project**
 
 **IMPORTANT**:
 
-The classnames (`coco_80_labels_list.txt`) may have spaces. Setting these names with the Brightsign registry tool will not work. However, we can modify the class names to substitute '_' for the space.
-
-```sh
-cd "${project_root:-.}"/install/RK3588/model
-
-# change all the spaces in the labels to underscores
-sed -i 's/ /_/g' ./coco_80_labels_list.txt
-```
+The classnames (`coco_80_labels_list.txt`) may have spaces. Setting these names with the Brightsign registry tool will not work. The above script automatically converts spaces to underscores (e.g., "cell phone" becomes "cell_phone") for all platforms during the copy process.
 
 ## (Optional) Step 2 - Build and test on Orange Pi
 
@@ -482,15 +503,15 @@ make
 make install
 ```
 
-## Step 3 - Build and Test on XT5
+## Step 3 - Build and Test on BrightSign Players
 
-The BrightSign SDK for the specific BSOS version must be used on an x86 host to build the binary that can be deployed on to the XT5 player.
+The BrightSign SDK for the specific BSOS version must be used on an x86 host to build the binary that can be deployed on to the BrightSign players.
 
 _Ensure you have installed the SDK in `${project_root}/sdk` as described in Step 0 - Setup._
 
 The setup script `environment-setup-aarch64-oe-linux` will set appropriate paths for the toolchain and files. This script must be `source`d in every new shell.
 
-### Build the app
+### Build for XT-5 Players (RK3588)
 
 ```sh
 cd "${project_root:-.}"
@@ -502,6 +523,42 @@ rm -rf build_xt5
 mkdir -p build_xt5 && cd $_
 
 cmake .. -DOECORE_TARGET_SYSROOT="${OECORE_TARGET_SYSROOT}" -DTARGET_SOC="rk3588" 
+make
+
+#rm -rf ../install
+make install
+```
+
+### Build for Firebird Players (RK3576)
+
+```sh
+cd "${project_root:-.}"
+source ./sdk/environment-setup-aarch64-oe-linux
+
+# this command can be used to clean old builds
+rm -rf build_firebird
+
+mkdir -p build_firebird && cd $_
+
+cmake .. -DOECORE_TARGET_SYSROOT="${OECORE_TARGET_SYSROOT}" -DTARGET_SOC="rk3576" 
+make
+
+#rm -rf ../install
+make install
+```
+
+### Build for LS-5 Players (RK3568)
+
+```sh
+cd "${project_root:-.}"
+source ./sdk/environment-setup-aarch64-oe-linux
+
+# this command can be used to clean old builds
+rm -rf build_ls5
+
+mkdir -p build_ls5 && cd $_
+
+cmake .. -DOECORE_TARGET_SYSROOT="${OECORE_TARGET_SYSROOT}" -DTARGET_SOC="rk3568" 
 make
 
 #rm -rf ../install
@@ -522,16 +579,38 @@ _If you are unfamiliar with this workflow or have not un-secured your player, co
 
 ## Step 4 - Package the Extension
 
-Copy the extension scripts to the install dir
+### Combined Extension for All Platforms
+
+The extension automatically detects the target platform at runtime and uses the appropriate model and binaries. This approach creates a single extension that works across all supported platforms.
+
+Copy the extension scripts to the install directories:
 
 ```sh
 cd "${project_root:-.}"
 
-cp bsext_init install/ && chmod +x install/bsext_init
-cp sh/uninstall.sh install/ && chmod +x install/uninstall.sh
-
-# cp -rf model install/
+# Copy scripts to each platform's install directory
+for SOC in RK3588 RK3576 RK3568; do
+    cp bsext_init install/${SOC}/ && chmod +x install/${SOC}/bsext_init
+    cp sh/uninstall.sh install/${SOC}/ && chmod +x install/${SOC}/uninstall.sh
+done
 ```
+
+### Runtime Platform Detection
+
+The extension automatically detects the target platform at runtime and selects the appropriate model and binaries:
+
+- **XT-5 Players (RK3588)**: Uses files from the `RK3588/` subdirectory
+- **Firebird Players (RK3576)**: Uses files from the `RK3576/` subdirectory
+- **LS-5 Players (RK3568)**: Uses files from the `RK3568/` subdirectory
+
+The platform detection is handled in the `bsext_init` script, which:
+
+1. Detects the SoC type using system information
+2. Sets the appropriate model path based on the detected platform
+3. Uses the platform-specific binary and library files
+4. Applies any registry overrides (e.g., custom model paths, device settings)
+
+This approach allows a single extension package to work across all supported BrightSign platforms without requiring separate builds or installations.
 
 #### To test the program without packing into an extension
 
