@@ -8,11 +8,12 @@ BSMP are delivered as an BrightSign OS (BOS) "extension." Extensions are deliver
 
 ## Table of Contents
 
-- [Selective Class Detection Feature](#selective-class-detection-feature) ⭐ **NEW**
+- [Selective Class Detection Feature](#selective-class-detection-feature)
 - [Supported Players](#supported-players)
 - [Supported YOLO Models](#supported-yolo-models)
 - [Extension Control](#extension-control)
 - [Project Overview & Requirements](#project-overview--requirements)
+- [Architecture & Design Documentation](#architecture--design-documentation)
 
 ## Supported Players
 
@@ -514,6 +515,10 @@ The setup script `environment-setup-aarch64-oe-linux` will set appropriate paths
 ### Build for XT-5 Players (RK3588)
 
 ```sh
+
+```
+
+```sh
 cd "${project_root:-.}"
 source ./sdk/environment-setup-aarch64-oe-linux
 
@@ -731,6 +736,35 @@ cp /var/volatile/bsext/ext_npu_yolo/uninstall.sh /usr/local/
 
 ```
 
+## Architecture & Design Documentation
+
+For detailed technical documentation covering the system's design, architecture, and development guidelines, see the following documents in the `docs/` directory:
+
+### 📋 [Software Architecture](docs/software-architecture.md)
+Comprehensive analysis of the system architecture including:
+- Component design and layered architecture
+- Producer-Consumer pattern implementation and rationale
+- Threading model and data flow
+- Multi-platform support architecture
+- Configuration system design
+
+### 🔧 [Integration & Extension Points](docs/integration-extension-points.md)
+Guide for developers looking to extend or integrate with the system:
+- Adding new transport protocols (MQTT example)
+- Creating custom message formatters (Prometheus example)
+- Performance testing extensions
+- Integration patterns and best practices
+
+### ⚖️ [Design Principles Analysis](docs/design-principles-analysis.md)
+In-depth evaluation of software engineering best practices:
+- SOLID principles adherence analysis
+- Clean Code practices assessment
+- CAP theorem considerations for distributed systems
+- Design patterns implementation review
+- Code quality metrics and recommendations
+
+These documents provide essential context for understanding the codebase architecture and serve as guides for contributing to or extending the project.
+
 ## UDP Debugging: Monitor Publications
 
 ### On OrangePI (Linux/x86):
@@ -742,6 +776,10 @@ nc -ul 5002
 ```
 
 ### On BrightSign Player:
+
+```bash
+
+```
 
 Use socat to listen for UDP messages:
 
