@@ -200,12 +200,12 @@ For the complete list of 80 supported classes, see `model/coco_80_labels_list.tx
 ./setup
 
 # Build for all platforms (15-30 minutes)
-./build
+./build-platforms
 
 # Build for specific platform
-./build XT5    # For XT-5 players (RK3588)
-./build LS5    # For LS-5 players (RK3568)
-./build Firebird  # For Firebird dev boards (RK3576)
+./build-platforms XT5    # For XT-5 players (RK3588)
+./build-platforms LS5    # For LS-5 players (RK3568)
+./build-platforms Firebird  # For Firebird dev boards (RK3576)
 ```
 
 **Output**: Compiled binaries in `build_<platform>/yolo_demo` ready for deployment
@@ -226,7 +226,7 @@ This repository describes building the project in these major steps:
 4. **Extension Packaging**: Package as BrightSign extension for production deployment
 
 **Build Methods:**
-- **🚀 New**: Automated Docker-based build system (`./setup` && `./build`)
+- **🚀 New**: Automated Docker-based build system (`./setup` && `./build-platforms`)
 - **📖 Legacy**: Manual build instructions (see sections below for detailed steps)
 
 ### Build System Troubleshooting
@@ -237,12 +237,12 @@ This repository describes building the project in these major steps:
 - **Permission denied**: Ensure Docker daemon is accessible to your user
 - **Architecture error**: Build system requires x86_64 host (Intel/AMD, not Apple Silicon)
 - **Disk space**: Requires ~25GB free space for Docker images and builds
-- **Build failures**: Use `./build --clean` to force clean rebuild
+- **Build failures**: Use `./build-platforms --clean` to force clean rebuild
 
 **Getting Help:**
 ```bash
-./setup --help    # Setup options
-./build --help    # Build options
+./setup --help           # Setup options
+./build-platforms --help # Build options
 ```
 4. Packaging the application and model as a BrightSign Extension
 
