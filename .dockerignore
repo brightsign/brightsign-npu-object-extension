@@ -27,14 +27,15 @@ test_*
 *.swp
 *.swo
 
-# Ignore model files (large)
-model/*.rknn
-model/*.onnx
-model/*.pb
+# Ignore model files (not needed for SDK build)
+model/
+toolkit/
+
+# Ignore source files (not needed for SDK build)
+src/
+include/
+cmake/
 
 # Keep only necessary files for Docker build
-!brightsign-*.tar.gz
 !brightsign-x86_64-cobra-toolchain-*.sh
 !sdk/
-!toolkit/rknn-toolkit2/rknn-toolkit-lite2/lib/
-!include/librknnrt.so
