@@ -191,13 +191,59 @@ For the complete list of 80 supported classes, see `model/coco_80_labels_list.tx
 - **No inference impact**: Model processing speed unchanged
 - **Memory efficient**: No additional runtime memory allocations
 
+## Quick Start (New Build System)
+
+**Time**: 30-60 minutes | **Prerequisites**: Docker, git, x86_64 host
+
+```bash
+# Setup build environment (5-10 minutes)
+./setup
+
+# Build for all platforms (15-30 minutes)
+./build
+
+# Build for specific platform
+./build XT5    # For XT-5 players (RK3588)
+./build LS5    # For LS-5 players (RK3568)
+./build Firebird  # For Firebird dev boards (RK3576)
+```
+
+**Output**: Compiled binaries in `build_<platform>/yolo_demo` ready for deployment
+
+The new build system provides:
+- **Automated Setup**: Single command environment preparation
+- **Cross-Platform Builds**: Docker-based compilation for all supported platforms
+- **Clean Builds**: Reproducible builds with dependency management
+- **Fast Incremental**: Cached builds for rapid development
+
 ## Project Overview & Requirements
 
 This repository describes building the project in these major steps:
 
-1. Compile the ONNX formatted model into _RKNN_ format for the Rockchip NPU
-2. Building and testing the model and application code on an [Orange Pi 5 Plus](http://www.orangepi.org/html/hardWare/computerAndMicrocontrollers/service-and-support/Orange-Pi-5-plus.html). ___NB__-_ this is optional, but is included as a guide to developing other applications
-3. Building and testing the model and application code on BrightSign Series 5 players (XT-5, Firebird, LS-5)
+1. **Quick Setup**: Use `./setup` and `./build` for automated cross-compilation (recommended)
+2. **Model Compilation**: Compile ONNX models to RKNN format for NPU acceleration
+3. **Testing**: Deploy and test on BrightSign Series 5 players or Orange Pi development boards
+4. **Extension Packaging**: Package as BrightSign extension for production deployment
+
+**Build Methods:**
+- **🚀 New**: Automated Docker-based build system (`./setup` && `./build`)
+- **📖 Legacy**: Manual build instructions (see sections below for detailed steps)
+
+### Build System Troubleshooting
+
+**Common Issues:**
+
+- **Docker not found**: Install Docker and ensure it's running
+- **Permission denied**: Ensure Docker daemon is accessible to your user
+- **Architecture error**: Build system requires x86_64 host (Intel/AMD, not Apple Silicon)
+- **Disk space**: Requires ~25GB free space for Docker images and builds
+- **Build failures**: Use `./build --clean` to force clean rebuild
+
+**Getting Help:**
+```bash
+./setup --help    # Setup options
+./build --help    # Build options
+```
 4. Packaging the application and model as a BrightSign Extension
 
 __IMPORTANT: THE TOOLCHAIN REFERENCED BY THIS PROJECT REQUIRES A DEVELOPMENT HOST WITH x86_64 (aka AMD64) INSTRUCTION SET ARCHITECTURE.__ This means that many common dev hosts such as Macs with Apple Silicon or ARM-based Windows and Linux computers __WILL NOT WORK.__  That also includes the OrangePi5Plus (OPi) as it is ARM-based. The OPi ___can___ be used to develop the application with good effect, but the model compilation and final build for BrigthSign OS (BSOS) ___must___ be performed on an x86_64 host.

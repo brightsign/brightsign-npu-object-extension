@@ -1,7 +1,46 @@
-# this file is used to set up the Python environment for the BrightSign extension
-# it should be sourced in the shell before running any Python scripts
+#!/bin/bash
 
-# Set up Python environment for BrightSign extension
-export PYTHONPATH="/var/volatile/bsext/ext_npu_yolo/usr/lib/python3.8:/var/volatile/bsext/ext_npu_yolo/usr/lib/python3.8/site-packages:$PYTHONPATH"
-export PATH="/var/volatile/bsext/ext_npu_yolo/usr/bin:$PATH"
-export LD_LIBRARY_PATH="/var/volatile/bsext/ext_npu_yolo/usr/lib:$LD_LIBRARY_PATH"
+# Setup environment for BrightSign YOLO Object Detection
+# This script sets up the build environment for development
+
+# Detect if running on BrightSign player or development host
+if [ -f "/etc/brightsign-version" ]; then
+    echo "Detected BrightSign player environment"
+    # On player, set up extension paths
+    export PATH="/var/volatile/bsext/ext_npu_yolo/usr/bin:$PATH"
+    export LD_LIBRARY_PATH="/var/volatile/bsext/ext_npu_yolo/usr/lib:$LD_LIBRARY_PATH"
+    
+    # If Python extension is available
+    if [ -d "/var/volatile/bsext/ext_pydev" ]; then
+        export PYTHONPATH="/var/volatile/bsext/ext_pydev/usr/lib/python3.8:/var/volatile/bsext/ext_pydev/usr/lib/python3.8/site-packages:$PYTHONPATH"
+        export PATH="/var/volatile/bsext/ext_pydev/usr/bin:$PATH"
+        export LD_LIBRARY_PATH="/var/volatile/bsext/ext_pydev/usr/lib:$LD_LIBRARY_PATH"
+    fi
+else
+    echo "Setting up development environment..."
+    
+    # Source BrightSign SDK if available
+    if [ -f "sdk/environment-setup-aarch64-oe-linux" ]; then
+        echo "Sourcing BrightSign SDK environment..."
+        source sdk/environment-setup-aarch64-oe-linux
+    elif [ -f "/opt/sdk/environment-setup-aarch64-oe-linux" ]; then
+        echo "Sourcing system SDK environment..."
+        source /opt/sdk/environment-setup-aarch64-oe-linux
+    else
+        echo "Warning: BrightSign SDK not found"
+    fi
+    
+    # Set RKNN paths if available
+    if [ -d "toolkit/rknn-toolkit2" ]; then
+        export RKNN_TOOLKIT_PATH="$(pwd)/toolkit/rknn-toolkit2"
+        echo "RKNN Toolkit path: $RKNN_TOOLKIT_PATH"
+    fi
+    
+    # Set model path
+    if [ -d "model" ]; then
+        export MODEL_PATH="$(pwd)/model"
+        echo "Model path: $MODEL_PATH"
+    fi
+fi
+
+echo "Environment setup complete"

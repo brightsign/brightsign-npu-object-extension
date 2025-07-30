@@ -27,7 +27,9 @@
       "Bash(/tmp:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(git checkout:*)",
+      "Bash(chmod:*)"
     ],
     "deny": []
   }

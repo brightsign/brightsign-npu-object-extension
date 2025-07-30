@@ -1,0 +1,40 @@
+# Ignore build directories
+build*/
+build_*/
+
+# Ignore git files
+.git
+.gitignore
+
+# Ignore documentation
+docs/
+*.md
+
+# Ignore test files
+tests/
+test_*
+
+# Ignore generated files
+*.o
+*.so
+*.a
+*.log
+*.zip
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore model files (large)
+model/*.rknn
+model/*.onnx
+model/*.pb
+
+# Keep only necessary files for Docker build
+!brightsign-*.tar.gz
+!brightsign-x86_64-cobra-toolchain-*.sh
+!sdk/
+!toolkit/rknn-toolkit2/rknn-toolkit-lite2/lib/
+!include/librknnrt.so
