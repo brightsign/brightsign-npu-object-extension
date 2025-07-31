@@ -1,10 +1,12 @@
 # build with
-# docker build --rm --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) -t bsoe-build .
-# to match up user and group ids with the host system
+# docker build --rm --build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g) \
+#   --build-arg BRIGHTSIGN_OS_VERSION=9.1.52 -t bsoe-build .
 
 # run with
 # docker run -it --rm \
-#   -v $(pwd):/home/builder/bsoe \
+#   -v bsoe-source:/home/builder/bsoe \
+#   -v $(pwd)/bsoe-recipes:/home/builder/patches:ro \
+#   -v $(pwd)/srv:/srv \
 #   bsoe-build
 
 
@@ -14,6 +16,9 @@ FROM debian:bullseye
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 ARG USERNAME=builder
+
+# BrightSign OS version configuration
+ARG BRIGHTSIGN_OS_VERSION=9.1.52
 
 # Configure locales and enable multiarch in a single layer
 RUN dpkg --add-architecture i386 && \
@@ -91,23 +96,38 @@ RUN groupadd -g ${GROUP_ID} ${USERNAME} && \
 # Set environment variables
 ENV LANG=en_US.UTF-8 \
     LANGUAGE=en_US:en \
-    LC_ALL=en_US.UTF-8
+    LC_ALL=en_US.UTF-8 \
+    BRIGHTSIGN_OS_VERSION=${BRIGHTSIGN_OS_VERSION}
 
-# Define healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost/ || exit 1
+# Create and set proper ownership of the working directory
+RUN mkdir -p /home/${USERNAME}/bsoe && \
+    chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}
 
 # Set working directory
 WORKDIR /home/${USERNAME}/bsoe
 
-# Switch to non-root user
+# Switch to non-root user early to set proper ownership
 USER ${USERNAME}
 
-RUN ulimit -n 8192 && \
-    ulimit -u 4096 && \
-    ulimit -l unlimited && \
-    ulimit -s 8192 && \
-    ulimit -v unlimited
+# Download and extract BrightSign OS source during build
+RUN cd /home/${USERNAME}/bsoe && \
+    echo "Downloading BrightSign OS source v${BRIGHTSIGN_OS_VERSION}..." && \
+    echo "Downloading dl archive (~20GB)..." && \
+    wget --progress=dot:giga \
+        "https://brightsignbiz.s3.amazonaws.com/firmware/opensource/$(echo ${BRIGHTSIGN_OS_VERSION} | cut -d'.' -f1-2)/${BRIGHTSIGN_OS_VERSION}/brightsign-${BRIGHTSIGN_OS_VERSION}-src-dl.tar.gz" && \
+    echo "Downloading oe archive (~169MB)..." && \
+    wget --progress=dot:mega \
+        "https://brightsignbiz.s3.amazonaws.com/firmware/opensource/$(echo ${BRIGHTSIGN_OS_VERSION} | cut -d'.' -f1-2)/${BRIGHTSIGN_OS_VERSION}/brightsign-${BRIGHTSIGN_OS_VERSION}-src-oe.tar.gz" && \
+    echo "Extracting source archives..." && \
+    tar -xzf "brightsign-${BRIGHTSIGN_OS_VERSION}-src-dl.tar.gz" && \
+    tar -xzf "brightsign-${BRIGHTSIGN_OS_VERSION}-src-oe.tar.gz" && \
+    echo "Cleaning up downloaded archives..." && \
+    rm -f *.tar.gz && \
+    echo "BrightSign OS source v${BRIGHTSIGN_OS_VERSION} ready"
 
-# Default command
+# Copy patch script (will be called by build script when needed)
+COPY scripts/setup-patches.sh /usr/local/bin/setup-patches.sh
+RUN sudo chmod +x /usr/local/bin/setup-patches.sh
+
+# Default command - clean container with no automatic execution
 CMD ["/bin/bash"]

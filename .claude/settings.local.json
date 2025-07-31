@@ -27,7 +27,17 @@
       "Bash(/tmp:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(git checkout:*)",
+      "Bash(chmod:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(./setup)",
+      "Bash(./setup:*)",
+      "Bash(timeout:*)",
+      "Bash(./build-platforms --help)",
+      "Bash(./build --help)",
+      "Bash(./build-apps --help)"
     ],
     "deny": []
   }
