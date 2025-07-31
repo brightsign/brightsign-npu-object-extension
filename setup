@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # BrightSign YOLO Object Detection - Setup Script
-# Prepares the build environment for cross-compilation
+# Creates bsoe-build Docker environment with BrightSign OS sources
 
 set -e
 
@@ -13,7 +13,7 @@ BRIGHTSIGN_OS_MINOR_VERSION=${BRIGHTSIGN_OS_MINOR_VERSION:-52}
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
-    echo "Setup BrightSign YOLO Object Detection build environment"
+    echo "Setup complete BrightSign YOLO Object Detection build environment with RKNN toolkit, models, and containers"
     echo ""
     echo "Options:"
     echo "  -y, --yes              Skip confirmation prompt"
@@ -128,109 +128,96 @@ check_prerequisites() {
 setup_docker() {
     log "Setting up Docker build environment..."
     
-    # Check if BrightSign OS source archives exist
-    if [[ ! -f "brightsign-${BRIGHTSIGN_OS_VERSION}-src-dl.tar.gz" ]] || 
-       [[ ! -f "brightsign-${BRIGHTSIGN_OS_VERSION}-src-oe.tar.gz" ]]; then
-        warn "BrightSign OS source archives not found locally"
-        warn "Docker build will download them (~2-3GB)"
-    else
-        log "Using existing BrightSign OS source archives"
-    fi
-    
-    # Build Docker image
-    log "Building Docker image (this may take 10-30 minutes)..."
+    # Build Docker image with BrightSign OS sources downloaded inside container
+    log "Building Docker image (this may take 5-60 minutes depending on download speed)..."
+    log "This will download BrightSign OS source (~20GB) inside the container"
     docker build --rm \
         --build-arg USER_ID=$(id -u) \
         --build-arg GROUP_ID=$(id -g) \
         --build-arg BRIGHTSIGN_OS_VERSION=${BRIGHTSIGN_OS_VERSION} \
         --ulimit memlock=-1:-1 \
-        -t yolo-build . || error "Failed to build Docker image"
+        -t bsoe-build . || error "Failed to build Docker image"
     
-    # Create srv directory for TFTP/NFS
+    # Create srv directory for build outputs
     mkdir -p srv
     
     success "Docker environment ready"
 }
 
-# Download SDK if not present
-download_sdk() {
-    log "Checking for BrightSign SDK..."
-    
-    if [[ -f "brightsign-x86_64-cobra-toolchain-${BRIGHTSIGN_OS_VERSION}.sh" ]]; then
-        log "SDK installer already present"
-        return
-    fi
-    
-    # Check if we have the source archives that contain the SDK
-    if [[ -f "brightsign-${BRIGHTSIGN_OS_VERSION}-src-oe.tar.gz" ]]; then
-        log "Extracting SDK from source archive..."
-        # The SDK would need to be built from source, which is handled by Docker
-        warn "SDK will be built inside Docker container"
-    else
-        warn "SDK installer not found. It will be built during Docker setup."
-    fi
-}
-
-# Clone or update RKNN toolkit
+# Clone or update RKNN toolkit and download models
 clone_rknn_toolkit() {
-    log "Setting up RKNN toolkit..."
+    log "Setting up RKNN toolkit and model zoo..."
     
     # Create toolkit directory if it doesn't exist
     mkdir -p toolkit
+    cd toolkit
     
     # Clone or update rknn-toolkit2
-    if [[ -d "toolkit/rknn-toolkit2" ]]; then
+    if [[ -d "rknn-toolkit2" ]]; then
         log "rknn-toolkit2 already exists, updating..."
-        cd toolkit/rknn-toolkit2
+        cd rknn-toolkit2
         git fetch || warn "Failed to fetch updates"
-        git checkout v2.3.2 || warn "Failed to checkout v2.3.2 tag"
-        cd ../..
+        git checkout v2.3.0 || warn "Failed to checkout v2.3.0 tag"
+        cd ..
     else
         log "Cloning rknn-toolkit2..."
-        cd toolkit
-        git clone https://github.com/airockchip/rknn-toolkit2.git || error "Failed to clone rknn-toolkit2"
-        cd rknn-toolkit2
-        git checkout v2.3.2 || error "Failed to checkout v2.3.2 tag"
-        cd ../..
+        git clone https://github.com/airockchip/rknn-toolkit2.git --depth 1 --branch v2.3.0 || error "Failed to clone rknn-toolkit2"
     fi
     
     # Clone or update rknn_model_zoo
-    if [[ -d "toolkit/rknn_model_zoo" ]]; then
+    if [[ -d "rknn_model_zoo" ]]; then
         log "rknn_model_zoo already exists, updating..."
-        cd toolkit/rknn_model_zoo
+        cd rknn_model_zoo
         git fetch || warn "Failed to fetch updates"
-        git checkout v2.3.2 || warn "Failed to checkout v2.3.2 tag"
-        cd ../..
+        git checkout v2.3.0 || warn "Failed to checkout v2.3.0 tag"
+        cd ..
     else
         log "Cloning rknn_model_zoo..."
-        cd toolkit
-        git clone https://github.com/airockchip/rknn_model_zoo.git || error "Failed to clone rknn_model_zoo"
-        cd rknn_model_zoo
-        git checkout v2.3.2 || error "Failed to checkout v2.3.2 tag"
-        cd ../..
+        git clone https://github.com/airockchip/rknn_model_zoo.git --depth 1 --branch v2.3.0 || error "Failed to clone rknn_model_zoo"
     fi
     
-    success "RKNN toolkit ready"
-}
-
-# Setup build directories
-setup_build_directories() {
-    log "Setting up build directories..."
+    # Download ONNX models
+    log "Downloading ONNX models..."
+    cd rknn_model_zoo
     
-    # Create platform-specific build directories
-    for platform in XT5 LS5 Firebird; do
-        mkdir -p "build_${platform,,}"
-    done
+    # Download YOLO Simplified model
+    log "Downloading YOLOv8 model..."
+    mkdir -p examples/yolov8/model/RK3588
+    cd examples/yolov8/model
+    if [[ -f "download_model.sh" ]]; then
+        chmod +x ./download_model.sh
+        ./download_model.sh || warn "Failed to download YOLOv8 model"
+    else
+        warn "YOLOv8 download_model.sh not found"
+    fi
+    cd ../../..
     
-    # Create model directory if it doesn't exist
-    mkdir -p model
+    # Download YOLOX model  
+    log "Downloading YOLOX model..."
+    mkdir -p examples/yolox/model/RK3588
+    cd examples/yolox/model
+    if [[ -f "download_model.sh" ]]; then
+        chmod +x ./download_model.sh
+        ./download_model.sh || warn "Failed to download YOLOX model"
+    else
+        warn "YOLOX download_model.sh not found"
+    fi
+    cd ../../..
     
-    # Ensure CMake files are present
-    if [[ ! -f "CMakeLists.txt" ]]; then
-        error "CMakeLists.txt not found. This script must be run from the project root."
+    # Build rknn_tk2 Docker container
+    log "Building rknn_tk2 Docker container..."
+    cd rknn-toolkit2/rknn-toolkit2/docker/docker_file/ubuntu_20_04_cp38
+    
+    if docker build --rm -t rknn_tk2 -f Dockerfile_ubuntu_20_04_for_cp38 .; then
+        success "rknn_tk2 Docker container built successfully"
+    else
+        warn "Failed to build rknn_tk2 Docker container - you may need to build it manually"
     fi
     
-    success "Build directories ready"
+    # Return to script directory
+    cd "${SCRIPT_DIR}"
+    
+    success "RKNN toolkit, model zoo, ONNX models, and Docker container ready"
 }
 
 # Main setup function
@@ -239,9 +226,11 @@ main() {
     echo "==============================================="
     echo "This script will:"
     echo "1. Check prerequisites"
-    echo "2. Setup Docker build environment"
-    echo "3. Download/update RKNN toolkit"
-    echo "4. Prepare build directories"
+    echo "2. Clone RKNN toolkit and model zoo repositories"
+    echo "3. Download ONNX models (YOLOv8n, YOLOX-s)"
+    echo "4. Build rknn_tk2 Docker container for model compilation"
+    echo "5. Setup Docker build environment (bsoe-build)"
+    echo "6. Download BrightSign OS source (~20GB) inside Docker container"
     echo ""
     echo "Building for BrightSign OS version: ${BRIGHTSIGN_OS_VERSION}"
     echo ""
@@ -261,10 +250,8 @@ main() {
     start_time=$(date +%s)
     
     check_prerequisites
-    download_sdk
-    setup_docker
     clone_rknn_toolkit
-    setup_build_directories
+    setup_docker
     
     end_time=$(date +%s)
     duration=$((end_time - start_time))
@@ -273,9 +260,10 @@ main() {
     success "Setup completed successfully in $(($duration / 60))m $(($duration % 60))s"
     echo ""
     echo "Next steps:"
-    echo "1. Run './build' to compile for all platforms"
-    echo "2. Run './build XT5' to compile for specific platform"
-    echo "3. Find compiled binaries in build_<platform>/ directories"
+    echo "1. Run './compile-models' to compile ONNX models to RKNN format"
+    echo "2. Run './build --extract-sdk' to build SDK and extract it"
+    echo "3. Run './brightsign-x86*.sh -d ./sdk -y' to install SDK"
+    echo "4. Run './build-apps' to build C++ application for all platforms"
     echo ""
     echo "Environment variables set:"
     echo "export BRIGHTSIGN_OS_VERSION=${BRIGHTSIGN_OS_VERSION}"
