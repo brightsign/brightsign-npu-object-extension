@@ -148,73 +148,91 @@ setup_docker() {
 clone_rknn_toolkit() {
     log "Setting up RKNN toolkit and model zoo..."
     
+    # Always start from script directory
+    cd "${SCRIPT_DIR}"
+    
     # Create toolkit directory if it doesn't exist
     mkdir -p toolkit
-    cd toolkit
     
     # Clone or update rknn-toolkit2
-    if [[ -d "rknn-toolkit2" ]]; then
+    cd "${SCRIPT_DIR}"
+    if [[ -d "toolkit/rknn-toolkit2" ]]; then
         log "rknn-toolkit2 already exists, updating..."
-        cd rknn-toolkit2
+        pushd toolkit/rknn-toolkit2 > /dev/null
         git fetch || warn "Failed to fetch updates"
         git checkout v2.3.0 || warn "Failed to checkout v2.3.0 tag"
-        cd ..
+        popd > /dev/null
     else
         log "Cloning rknn-toolkit2..."
+        pushd toolkit > /dev/null
         git clone https://github.com/airockchip/rknn-toolkit2.git --depth 1 --branch v2.3.0 || error "Failed to clone rknn-toolkit2"
+        popd > /dev/null
     fi
     
     # Clone or update rknn_model_zoo
-    if [[ -d "rknn_model_zoo" ]]; then
+    cd "${SCRIPT_DIR}"
+    if [[ -d "toolkit/rknn_model_zoo" ]]; then
         log "rknn_model_zoo already exists, updating..."
-        cd rknn_model_zoo
+        pushd toolkit/rknn_model_zoo > /dev/null
         git fetch || warn "Failed to fetch updates"
         git checkout v2.3.0 || warn "Failed to checkout v2.3.0 tag"
-        cd ..
+        popd > /dev/null
     else
         log "Cloning rknn_model_zoo..."
+        pushd toolkit > /dev/null
         git clone https://github.com/airockchip/rknn_model_zoo.git --depth 1 --branch v2.3.0 || error "Failed to clone rknn_model_zoo"
+        popd > /dev/null
     fi
     
     # Download ONNX models
     log "Downloading ONNX models..."
-    cd rknn_model_zoo
     
     # Download YOLO Simplified model
+    cd "${SCRIPT_DIR}"
     log "Downloading YOLOv8 model..."
-    mkdir -p examples/yolov8/model/RK3588
-    cd examples/yolov8/model
-    if [[ -f "download_model.sh" ]]; then
-        chmod +x ./download_model.sh
-        ./download_model.sh || warn "Failed to download YOLOv8 model"
-    else
-        warn "YOLOv8 download_model.sh not found"
+    mkdir -p toolkit/rknn_model_zoo/examples/yolov8/model/RK3588
+    if [[ -d "toolkit/rknn_model_zoo/examples/yolov8/model" ]]; then
+        pushd toolkit/rknn_model_zoo/examples/yolov8/model > /dev/null
+        if [[ -f "download_model.sh" ]]; then
+            chmod +x ./download_model.sh
+            ./download_model.sh || warn "Failed to download YOLOv8 model"
+        else
+            warn "YOLOv8 download_model.sh not found"
+        fi
+        popd > /dev/null
     fi
-    cd ../../..
     
     # Download YOLOX model  
+    cd "${SCRIPT_DIR}"
     log "Downloading YOLOX model..."
-    mkdir -p examples/yolox/model/RK3588
-    cd examples/yolox/model
-    if [[ -f "download_model.sh" ]]; then
-        chmod +x ./download_model.sh
-        ./download_model.sh || warn "Failed to download YOLOX model"
-    else
-        warn "YOLOX download_model.sh not found"
+    mkdir -p toolkit/rknn_model_zoo/examples/yolox/model/RK3588
+    if [[ -d "toolkit/rknn_model_zoo/examples/yolox/model" ]]; then
+        pushd toolkit/rknn_model_zoo/examples/yolox/model > /dev/null
+        if [[ -f "download_model.sh" ]]; then
+            chmod +x ./download_model.sh
+            ./download_model.sh || warn "Failed to download YOLOX model"
+        else
+            warn "YOLOX download_model.sh not found"
+        fi
+        popd > /dev/null
     fi
-    cd ../../..
     
     # Build rknn_tk2 Docker container
+    cd "${SCRIPT_DIR}"
     log "Building rknn_tk2 Docker container..."
-    cd rknn-toolkit2/rknn-toolkit2/docker/docker_file/ubuntu_20_04_cp38
-    
-    if docker build --rm -t rknn_tk2 -f Dockerfile_ubuntu_20_04_for_cp38 .; then
-        success "rknn_tk2 Docker container built successfully"
+    if [[ -d "toolkit/rknn-toolkit2/rknn-toolkit2/docker/docker_file/ubuntu_20_04_cp38" ]]; then
+        pushd toolkit/rknn-toolkit2/rknn-toolkit2/docker/docker_file/ubuntu_20_04_cp38 > /dev/null
+        if docker build --rm -t rknn_tk2 -f Dockerfile_ubuntu_20_04_for_cp38 .; then
+            success "rknn_tk2 Docker container built successfully"
+        else
+            warn "Failed to build rknn_tk2 Docker container - you may need to build it manually"
+        fi
+        popd > /dev/null
     else
-        warn "Failed to build rknn_tk2 Docker container - you may need to build it manually"
+        warn "Docker build directory not found at toolkit/rknn-toolkit2/rknn-toolkit2/docker/docker_file/ubuntu_20_04_cp38"
     fi
     
-    # Return to script directory
+    # Ensure we're back at script directory
     cd "${SCRIPT_DIR}"
     
     success "RKNN toolkit, model zoo, ONNX models, and Docker container ready"
