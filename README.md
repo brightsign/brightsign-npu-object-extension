@@ -8,7 +8,7 @@ This project provides a complete, automated build system to create BrightSign ex
 
 ## 🚀 Quick Start (Complete Automated Workflow)
 
-**Total Time**: 60-90 minutes | **Prerequisites**: Docker, git, x86_64 Linux host
+__Total Time__: 60-90 minutes | __Prerequisites__: Docker, git, x86_64 Linux host
 
 > ⏱️ **Time Breakdown**: Most time is spent in the OpenEmbedded SDK build (30-45 min). The process is fully automated but requires patience for the BitBake compilation.
 
@@ -34,11 +34,15 @@ cd cv-npu-yolo-object-detect
 ./package
 ```
 
+In a typical development workflow, steps 1 - 4 (setup, model compilation, build and install the sdk) will need to only be done once.  Building the apps and packaging them will likely be repeated as the developer changes the app code.
+
 **✅ Success**: You now have production-ready extension packages:
+
 - `yolo-dev-<timestamp>.zip` (development/testing)
 - `yolo-ext-<timestamp>.zip` (production deployment)
 
 **🎯 Deploy to Player**:
+
 1. Transfer extension package to BrightSign player via DWS
 2. Install: `bash ./ext_npu_yolo_install-lvm.sh && reboot`
 3. Extension auto-starts with USB camera detection
@@ -46,14 +50,16 @@ cd cv-npu-yolo-object-detect
 ## 📋 Requirements & Prerequisites
 
 ### Hardware Requirements
+
 | Component | Requirement |
 |-----------|-------------|
-| **Development Host** | x86_64 architecture (Intel/AMD) |
-| **BrightSign Player** | Series 5 (XT-5, LS-5) or Firebird dev board | 
-| **Camera** | USB webcam (tested: Logitech C270, Thustar) |
-| **Storage** | 25GB+ free space for builds |
+| __Development Host__ | x86_64 architecture (Intel/AMD) |
+| __BrightSign Player__ | Series 5 (XT-5, LS-5) or Firebird dev board |
+| __Camera__ | USB webcam (tested: Logitech C270, Thustar) |
+| __Storage__ | 25GB+ free space for builds |
 
 ### Supported Players
+
 | Player | SOC | Platform Code | Status |
 |--------|-----|---------------|---------|
 | XT-5 (XT1145, XT2145) | RK3588 | XT5 | ✅ Production |
@@ -61,17 +67,19 @@ cd cv-npu-yolo-object-detect
 | Firebird | RK3576 | Firebird | 🧪 Development |
 
 ### Software Requirements
+
 - **Docker** (for containerized builds)
 - **Git** (for repository cloning)
 - **25GB+ disk space** (for OpenEmbedded builds)
 
-**Important**: Apple Silicon Macs are not supported. Use x86_64 Linux or Windows with WSL2.
+__Important__: Apple Silicon Macs are not supported. Use x86_64 Linux or Windows with WSL2.
 
 ## ⚙️ Configuration & Customization
 
 The extension is highly configurable via BrightSign registry keys:
 
 ### Core Settings
+
 ```bash
 # Auto-start control
 registry write extension bsext-yolo-disable-auto-start true
@@ -84,6 +92,7 @@ registry write extension bsext-yolo-model-path /path/to/custom.rknn
 ```
 
 ### AI Configuration
+
 ```bash
 # Selective class detection (only show/count specific objects)
 registry write extension bsext-yolo-classes person,car,dog
@@ -93,22 +102,196 @@ registry write extension bsext-yolo-confidence-threshold 0.6
 ```
 
 ### COCO Classes Reference
+
 The extension supports all 80 COCO classes. Common examples:
+
 - **People & Animals**: `person`, `cat`, `dog`, `horse`, `elephant`
 - **Vehicles**: `car`, `truck`, `bus`, `motorcycle`, `bicycle`
-- **Indoor Objects**: `chair`, `couch`, `tv`, `laptop`, `cell_phone`
+- __Indoor Objects__: `chair`, `couch`, `tv`, `laptop`, `cell_phone`
 
-**Note**: Use underscores instead of spaces (e.g., `cell_phone`, not `cell phone`)
+__Note__: Use underscores instead of spaces (e.g., `cell_phone`, not `cell phone`)
 
 ### Extension Behavior
+
 - **Visual Output**: `/tmp/output.jpg` (decorated image with bounding boxes)
 - **Data Output**: `/tmp/results.json` (complete detection results)
 - **UDP Streaming**: Port 5002 (JSON), Port 5000 (BrightScript format)
 - **Performance**: ~30 FPS continuous inference on NPU
 
+## 📄 Extension Versioning & Manifest
+
+**NEW in v1.2.0**: This extension now includes BrightSign's new manifest system for version management and compatibility checking.
+
+### Version Information
+
+- **Current Version**: 1.2.0
+- **Minimum OS**: BrightSign OS 9.0.0+
+- **Target OS**: BrightSign OS 9.1.0
+- **License**: Apache 2.0
+
+### For Developers
+
+To customize version information for your own extensions:
+
+```bash
+# Copy the template
+cp manifest-config.template.json manifest-config.json
+
+# Edit your extension details
+# - Version number
+# - Description
+# - Author information
+# - Compatibility requirements
+
+# Package automatically generates manifest.json
+./package
+```
+
+### Manifest Features
+
+- **Automated Compatibility Checking**: Validates OS and hardware compatibility at runtime
+- **Version Tracking**: Semantic versioning with build metadata
+- **Registry Configuration**: Declares available user settings
+- **Hardware Requirements**: Specifies memory, storage, and capability needs
+
+📖 **See [Manifest Guide](docs/manifest-guide.md) for complete documentation**
+
+## 🚀 Phase 3: Advanced Extension Management
+
+**NEW in v1.2.0**: Complete automated update management, rollback capabilities, and enhanced validation system.
+
+### Update Management & Orchestration
+
+Comprehensive update workflow with policy enforcement, version validation, and automatic configuration preservation:
+
+```bash
+# Update extension with full validation
+./sh/update-extension.sh yolo-ext-20250201-123456.zip
+
+# Test update compatibility without executing  
+./sh/update-extension.sh --dry-run yolo-ext-20250201-123456.zip
+
+# Force update ignoring policy restrictions
+./sh/update-extension.sh --force --verbose yolo-ext-20250201-123456.zip
+
+# Update without configuration backup (not recommended)
+./sh/update-extension.sh --no-backup yolo-ext-20250201-123456.zip
+```
+
+**Update Policies:**
+- **`automatic`**: Allow automated updates (development environments)
+- **`manual`**: Require explicit approval (production default) 
+- **`blocked`**: Prevent updates (deprecated/end-of-life versions)
+
+### Atomic Rollback System
+
+Safe rollback to previous versions with LVM-based atomic operations:
+
+```bash
+# Rollback to latest backup
+./sh/rollback-extension.sh npu_yolo
+
+# List available backups
+./sh/rollback-extension.sh --list-backups npu_yolo
+
+# Rollback to specific backup
+./sh/rollback-extension.sh --backup backup_20250201_143022 npu_yolo
+
+# Test rollback capability without executing
+./sh/rollback-extension.sh --dry-run npu_yolo
+
+# Force rollback even if policy doesn't support it
+./sh/rollback-extension.sh --force npu_yolo
+```
+
+### Configuration Backup & Restore
+
+Built-in configuration management with automatic preservation:
+
+```bash
+# Using bsext_init for configuration management
+./bsext_init backup                    # Auto-generated backup name
+./bsext_init backup my_backup_name     # Custom backup name
+./bsext_init restore                   # Restore from latest backup  
+./bsext_init restore my_backup_name    # Restore from specific backup
+./bsext_init list-backups              # List available backups
+```
+
+**What gets backed up:**
+- Registry configuration (user settings)
+- User data files (`/tmp/yolo_output`, `/tmp/results.json`) 
+- Extension state and preferences
+- Manifest metadata for reference
+
+### Manifest Validation Tools
+
+Comprehensive validation with detailed reporting:
+
+```bash
+# Basic manifest validation
+./sh/validate-manifest.sh manifest.json
+
+# Verbose validation with detailed output
+./sh/validate-manifest.sh --verbose manifest.json
+
+# Schema validation (if schema available)
+./sh/validate-manifest.sh --schema schemas/extension-manifest-v1.json manifest.json
+
+# Generate detailed validation report
+./sh/validate-manifest.sh --report manifest.json > validation-report.txt
+
+# Check formatting and suggest improvements
+./sh/validate-manifest.sh --format manifest.json
+```
+
+**Validation Features:**
+- JSON syntax and schema compliance
+- Semantic validation of version formats
+- Compatibility requirement checking
+- Registry configuration validation
+- Cross-reference validation
+- Formatting and style suggestions
+
+### Enhanced Installation Validation
+
+Pre-installation checks with cross-compilation awareness:
+
+**Host-side validation** (during packaging):
+- ✅ Package structure and completeness
+- ✅ Manifest schema compliance  
+- ✅ Size calculations vs declared requirements
+- ✅ Cross-platform consistency
+
+**Target-side validation** (during installation):
+- ✅ Hardware compatibility (SOC, NPU, camera)
+- ✅ OS version compatibility
+- ✅ Storage space availability
+- ✅ System dependency validation
+- ✅ Runtime capability checking
+
+### Development & Testing Workflows
+
+Enhanced development experience with comprehensive tooling:
+
+```bash
+# Enhanced packaging with validation
+./package --verify                     # Run full validation after packaging
+
+# Validate manifest during development  
+./sh/validate-manifest.sh --verbose manifest-config.json
+
+# Test update process in development
+./sh/update-extension.sh --dry-run --verbose test-package.zip
+
+# Create and test configuration backups
+./bsext_init backup dev_test_backup
+./bsext_init restore dev_test_backup
+```
+
 ## 📦 Production Deployment
 
 ### Package Options
+
 ```bash
 # Create both development and production packages
 ./package
@@ -126,6 +309,7 @@ The extension supports all 80 COCO classes. Common examples:
 ### Installation Methods
 
 **Development Installation** (volatile, lost on reboot):
+
 ```bash
 # On player
 mkdir -p /usr/local/yolo && cd /usr/local/yolo
@@ -134,6 +318,7 @@ unzip /storage/sd/yolo-dev-*.zip
 ```
 
 **Production Installation** (permanent):
+
 ```bash
 # On player
 cd /usr/local && unzip /storage/sd/yolo-ext-*.zip
@@ -142,6 +327,7 @@ reboot  # Extension auto-starts after reboot
 ```
 
 ### Validation & Testing
+
 ```bash
 # Test specific platform build
 ./build-apps XT5 && ./package --soc RK3588 --dev-only
@@ -156,16 +342,19 @@ ls install/*/model/*.rknn
 ## 🛠️ Development & Testing
 
 ### Rapid Development Workflow
+
 For faster iteration during development, consider using Orange Pi boards:
 
-**📋 See [OrangePI_Development.md](OrangePI_Development.md) for complete development guide**
+__📋 See [OrangePI_Development.md](OrangePI_Development.md) for complete development guide__
 
 Benefits:
-- **Faster builds**: Native ARM compilation vs cross-compilation  
+
+- **Faster builds**: Native ARM compilation vs cross-compilation
 - **Better debugging**: Full GDB support and system monitoring
 - **Same hardware**: Uses identical Rockchip SoCs as BrightSign players
 
 ### Build System Options
+
 ```bash
 # Build specific platforms only
 ./build-apps XT5      # XT-5 players only
@@ -183,21 +372,31 @@ Benefits:
 ### Troubleshooting
 
 **Common Issues**:
+
 - **Docker not running**: `systemctl start docker`
 - **Permission denied**: Add user to docker group
 - **Out of space**: Need 25GB+ for OpenEmbedded builds
-- **Wrong architecture**: Must use x86_64 host (not ARM/Apple Silicon)
+- __Wrong architecture__: Must use x86_64 host (not ARM/Apple Silicon)
 
 **Getting Help**:
+
 ```bash
-./setup --help          # Setup and environment options
-./compile-models --help # Model compilation options  
-./build --help          # SDK build options
-./build-apps --help     # Application build options
-./package --help        # Packaging options
+# Core build system
+./setup --help                    # Setup and environment options
+./compile-models --help           # Model compilation options  
+./build --help                    # SDK build options
+./build-apps --help               # Application build options
+./package --help                  # Packaging options
+
+# Phase 3 management tools
+./sh/update-extension.sh --help   # Update orchestration options
+./sh/rollback-extension.sh --help # Rollback management options  
+./sh/validate-manifest.sh --help  # Manifest validation options
+./bsext_init --help               # Extension control and configuration
 ```
 
 **Build Failures**:
+
 ```bash
 # Clean and retry
 ./build-apps --clean
@@ -208,18 +407,23 @@ Benefits:
 ## 🎯 Advanced Usage
 
 ### Custom Models
+
 Replace default models with your own ONNX models:
+
 1. Place ONNX model in `toolkit/rknn_model_zoo/examples/custom/model/`
 2. Run `./compile-models` to convert to RKNN format
 3. Set registry key: `bsext-yolo-model-path /path/to/custom.rknn`
 
 ### Multi-Platform Development
+
 The extension automatically detects platform at runtime:
+
 - **RK3588** (XT-5): Uses `RK3588/` subdirectory
-- **RK3568** (LS-5): Uses `RK3568/` subdirectory  
+- **RK3568** (LS-5): Uses `RK3568/` subdirectory
 - **RK3576** (Firebird): Uses `RK3576/` subdirectory
 
 ### Performance Tuning
+
 - **Confidence threshold**: Higher values reduce false positives
 - **Class filtering**: Improves performance by reducing output processing
 - **Model selection**: YOLOv8 (faster) vs YOLOX (more accurate)
@@ -229,21 +433,31 @@ The extension automatically detects platform at runtime:
 For in-depth technical information:
 
 ### 🏗️ [Software Architecture](docs/software-architecture.md)
+
 - Component design and threading model
 - Producer-Consumer pattern implementation
 - Multi-platform support architecture
 
 ### 🔌 [Integration Guide](docs/integration-extension-points.md)
+
 - Adding custom transport protocols
 - Creating message formatters
 - Performance testing extensions
 
+### 📄 [Manifest Guide](docs/manifest-guide.md)
+
+- Extension versioning system
+- Compatibility declarations
+- User configuration options
+
 ### 🍊 [Orange Pi Development](OrangePI_Development.md)
+
 - Rapid prototyping workflow
 - Native development environment
 - Testing and debugging guide
 
 ### ⚖️ [Design Principles](docs/design-principles-analysis.md)
+
 - SOLID principles adherence
 - Clean Code practices assessment
 - Architecture design patterns
@@ -256,6 +470,7 @@ For in-depth technical information:
 For users who need fine-grained control over the build process, the original manual steps are still available:
 
 ### Manual Model Compilation
+
 ```bash
 # Setup toolkit manually
 cd toolkit/rknn-toolkit2/docker
@@ -268,6 +483,7 @@ docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
 ```
 
 ### Manual SDK Building
+
 ```bash
 # Download BrightSign OS sources
 wget https://brightsignbiz.s3.amazonaws.com/firmware/opensource/9.1/9.1.52/brightsign-9.1.52-src-*.tar.gz
@@ -278,6 +494,7 @@ cd /home/builder/bsoe/build && MACHINE=cobra ./bsbb brightsign-sdk
 ```
 
 ### Manual Cross-Compilation
+
 ```bash
 # Source SDK environment
 source ./sdk/environment-setup-aarch64-oe-linux
@@ -293,12 +510,14 @@ make && make install
 ## 🔗 Model Compatibility & Licensing
 
 ### Supported Models
+
 - ✅ **YOLOv8** (nano, small, medium, large, xl) - YOLO Simplified architecture
-- ✅ **YOLOX** (nano, tiny, small, medium, large, xl) - YOLOX architecture  
+- ✅ **YOLOX** (nano, tiny, small, medium, large, xl) - YOLOX architecture
 - ✅ **COCO 80-class** models (default)
 - ✅ **Custom trained** models (if following YOLO/YOLOX output formats)
 
 ### Licensing
+
 This project is released under [Apache 2.0 License](LICENSE.txt). Models from Rockchip Model Zoo have their own licenses - see [model-licenses.md](model-licenses.md) for details.
 
 ---

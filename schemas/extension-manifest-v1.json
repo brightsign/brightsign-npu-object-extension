@@ -1,0 +1,285 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brightsign.biz/schemas/extension-manifest/v1.json",
+  "title": "BrightSign Extension Manifest",
+  "description": "Schema for BrightSign extension manifest.json files",
+  "type": "object",
+  "required": ["manifestVersion", "extension", "compatibility"],
+  "additionalProperties": false,
+  
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Reference to this schema for validation"
+    },
+    
+    "manifestVersion": {
+      "type": "integer",
+      "description": "Version of the manifest schema",
+      "enum": [1]
+    },
+    
+    "extension": {
+      "type": "object",
+      "required": ["id", "name", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+          "description": "Unique identifier in reverse domain notation"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 45
+        },
+        "shortName": {
+          "type": "string",
+          "maxLength": 12
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?(\\+[a-zA-Z0-9]+)?$"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 132
+        },
+        "author": {
+          "oneOf": [
+            { "type": "string" },
+            {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "email": { "type": "string", "format": "email" },
+                "url": { "type": "string", "format": "uri" }
+              }
+            }
+          ]
+        },
+        "license": { "type": "string" },
+        "homepage": { "type": "string", "format": "uri" },
+        "category": {
+          "type": "string",
+          "enum": ["ai-vision", "media", "network", "control", "display", "utility"]
+        }
+      }
+    },
+    
+    "compatibility": {
+      "type": "object",
+      "required": ["osVersion"],
+      "properties": {
+        "osVersion": {
+          "type": "object",
+          "required": ["min"],
+          "properties": {
+            "min": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+            "target": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+            "max": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" }
+          }
+        },
+        "players": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["series"],
+            "properties": {
+              "series": { "type": "string" },
+              "models": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "features": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "deprecated": { "type": "boolean" }
+            }
+          }
+        },
+        "soc": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "enum": ["RK3588", "RK3568", "RK3576"]
+              },
+              "platforms": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "minRevision": { "type": "string" },
+              "experimental": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    
+    "requirements": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "memory": {
+          "type": "object",
+          "properties": {
+            "minimum": { "type": "string", "pattern": "^\\d+[KMG]B$" },
+            "recommended": { "type": "string", "pattern": "^\\d+[KMG]B$" }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "properties": {
+            "installation": { "type": "string", "pattern": "^\\d+[KMG]B$" },
+            "runtime": { "type": "string", "pattern": "^\\d+[KMG]B$" }
+          }
+        },
+        "dependencies": {
+          "type": "object",
+          "properties": {
+            "system": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "extensions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id"],
+                "properties": {
+                  "id": { "type": "string" },
+                  "version": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "autoStart": { "type": "boolean" },
+        "startupDelay": { "type": "integer", "minimum": 0 },
+        "restartPolicy": {
+          "type": "string",
+          "enum": ["always", "on-failure", "never"]
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "normal", "high"]
+        },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "cpuLimit": { "type": "string", "pattern": "^\\d+%$" },
+            "memoryLimit": { "type": "string", "pattern": "^\\d+[KMG]B$" }
+          }
+        }
+      }
+    },
+    
+    "registry": {
+      "type": "object",
+      "properties": {
+        "configurable": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "type"],
+            "properties": {
+              "key": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["string", "number", "boolean", "array"]
+              },
+              "default": {},
+              "description": { "type": "string" },
+              "min": { "type": "number" },
+              "max": { "type": "number" },
+              "enum": { "type": "array" }
+            }
+          }
+        }
+      }
+    },
+    
+    "update": {
+      "type": "object",
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": ["automatic", "manual", "blocked"],
+          "description": "Update policy: automatic (allow auto-updates), manual (require approval), blocked (prevent updates)"
+        },
+        "backupPrevious": {
+          "type": "boolean",
+          "description": "Create backup of previous version before updating"
+        },
+        "preserveConfig": {
+          "type": "boolean", 
+          "description": "Preserve user configuration during updates"
+        },
+        "rollbackSupported": {
+          "type": "boolean",
+          "description": "Extension supports rollback to previous version"
+        },
+        "minVersionForUpdate": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?(\\+[a-zA-Z0-9]+)?$",
+          "description": "Minimum current version required to update to this version"
+        },
+        "maxVersionGap": {
+          "type": "string", 
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?(\\+[a-zA-Z0-9]+)?$",
+          "description": "Maximum version gap allowed for direct updates"
+        },
+        "requiresReboot": {
+          "type": "boolean",
+          "description": "Extension update requires system reboot"
+        },
+        "updateScript": {
+          "type": "string",
+          "description": "Custom update script to run during updates"
+        }
+      }
+    },
+    
+    "build": {
+      "type": "object",
+      "properties": {
+        "timestamp": { "type": "string", "format": "date-time" },
+        "sdk": { "type": "string" },
+        "commit": { "type": "string" },
+        "ci": {
+          "type": "object",
+          "properties": {
+            "system": { "type": "string" },
+            "buildNumber": { "type": "string" }
+          }
+        }
+      }
+    },
+    
+    "signature": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["sha256", "sha512"]
+        },
+        "value": { "type": "string" }
+      }
+    }
+  }
+}

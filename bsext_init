@@ -42,7 +42,10 @@ get_soc_name() {
             SOC_NAME="RK3568"
         fi
     else
-        echo "WARNING: Unable to determine SOC model, EXITING"
+        echo "❌ ERROR: Unable to determine SOC model - system not supported"
+        echo "💡 Resolution: This extension requires a Rockchip-based BrightSign player"
+        echo "   Supported models: XT-5 series (RK3588), LS-5 series (RK3568), Firebird (RK3576)"
+        echo "   Current system may not be compatible"
         exit 1
     fi
 
@@ -111,6 +114,563 @@ get_confidence_threshold() {
     fi
 }
 
+# Compare semantic versions
+# Returns 0 if $1 >= $2, 1 if $1 < $2
+version_compare() {
+    local ver1="$1"
+    local ver2="$2"
+    
+    # Strip any pre-release/build metadata for basic comparison
+    ver1=$(echo "$ver1" | sed 's/[-+].*//')
+    ver2=$(echo "$ver2" | sed 's/[-+].*//')
+    
+    # Convert versions to arrays
+    IFS='.' read -ra VER1_PARTS <<< "$ver1"
+    IFS='.' read -ra VER2_PARTS <<< "$ver2"
+    
+    # Compare each part
+    for i in {0..2}; do
+        local part1=${VER1_PARTS[$i]:-0}
+        local part2=${VER2_PARTS[$i]:-0}
+        
+        if [ $part1 -gt $part2 ]; then
+            return 0
+        elif [ $part1 -lt $part2 ]; then
+            return 1
+        fi
+    done
+    
+    return 0
+}
+
+# Check if version matches a range specification
+# Supports: ^1.2.0 (caret), ~1.2.0 (tilde), >=1.2.0, >1.2.0, <=1.2.0, <1.2.0, =1.2.0
+version_matches_range() {
+    local version="$1"
+    local range="$2"
+    
+    # Simple exact match
+    if [[ "$range" == "$version" ]]; then
+        return 0
+    fi
+    
+    # Handle caret range: ^1.2.0 means >=1.2.0 <2.0.0
+    if [[ "$range" =~ ^\^(.+)$ ]]; then
+        local base_version="${BASH_REMATCH[1]}"
+        IFS='.' read -ra BASE_PARTS <<< "$base_version"
+        local major=${BASE_PARTS[0]:-0}
+        local next_major=$((major + 1))
+        
+        # Check if version >= base_version and < next_major.0.0
+        if version_compare "$version" "$base_version" && ! version_compare "$version" "${next_major}.0.0"; then
+            return 0
+        fi
+        return 1
+    fi
+    
+    # Handle tilde range: ~1.2.0 means >=1.2.0 <1.3.0
+    if [[ "$range" =~ ^~(.+)$ ]]; then
+        local base_version="${BASH_REMATCH[1]}"
+        IFS='.' read -ra BASE_PARTS <<< "$base_version"
+        local major=${BASE_PARTS[0]:-0}
+        local minor=${BASE_PARTS[1]:-0}
+        local next_minor=$((minor + 1))
+        
+        # Check if version >= base_version and < major.next_minor.0
+        if version_compare "$version" "$base_version" && ! version_compare "$version" "${major}.${next_minor}.0"; then
+            return 0
+        fi
+        return 1
+    fi
+    
+    # Handle comparison operators
+    if [[ "$range" =~ ^(>=|>|<=|<|=)(.+)$ ]]; then
+        local operator="${BASH_REMATCH[1]}"
+        local target_version="${BASH_REMATCH[2]}"
+        
+        case "$operator" in
+            ">=")
+                version_compare "$version" "$target_version"
+                return $?
+                ;;
+            ">")
+                version_compare "$version" "$target_version" && [[ "$version" != "$target_version" ]]
+                return $?
+                ;;
+            "<=")
+                ! version_compare "$version" "$target_version" || [[ "$version" == "$target_version" ]]
+                return $?
+                ;;
+            "<")
+                ! version_compare "$version" "$target_version"
+                return $?
+                ;;
+            "=")
+                [[ "$version" == "$target_version" ]]
+                return $?
+                ;;
+        esac
+    fi
+    
+    # Default: treat as exact match
+    [[ "$range" == "$version" ]]
+    return $?
+}
+
+# Parse memory/storage size strings (e.g., "512MB", "1GB") to bytes
+parse_size_to_bytes() {
+    local size_str="$1"
+    local number=$(echo "$size_str" | sed 's/[^0-9]//g')
+    local unit=$(echo "$size_str" | sed 's/[0-9]//g' | tr '[:lower:]' '[:upper:]')
+    
+    case "$unit" in
+        "KB"|"K")
+            echo $((number * 1024))
+            ;;
+        "MB"|"M")
+            echo $((number * 1024 * 1024))
+            ;;
+        "GB"|"G")
+            echo $((number * 1024 * 1024 * 1024))
+            ;;
+        *)
+            echo "$number"
+            ;;
+    esac
+}
+
+# Validate hardware capabilities and features
+validate_hardware_requirements() {
+    local manifest_file="$1"
+    local validation_errors=0
+    
+    # Get required capabilities from manifest
+    local capabilities=$(jq -r '.requirements.capabilities[]? // empty' "$manifest_file" 2>/dev/null)
+    
+    if [ -z "$capabilities" ]; then
+        return 0
+    fi
+    
+    echo "Checking hardware capabilities..."
+    
+    while IFS= read -r capability; do
+        case "$capability" in
+            "camera.usb")
+                # Check for USB camera devices
+                if ! ls /dev/video* >/dev/null 2>&1; then
+                    if is_dev_mode; then
+                        echo "DEV: USB camera capability required but no video devices found (continuing in dev mode)"
+                    else
+                        echo "❌ ERROR: USB camera capability required but no video devices found"
+                        echo "   Remediation: Connect a USB camera or disable camera requirement"
+                        validation_errors=$((validation_errors + 1))
+                    fi
+                else
+                    echo "✅ USB camera capability: OK"
+                fi
+                ;;
+            "npu.rockchip")
+                # Check for Rockchip NPU
+                if [ ! -c /dev/rknpu ] && [ ! -f /sys/class/devfreq/fdab0000.npu/available_frequencies ]; then
+                    if is_dev_mode; then
+                        echo "DEV: Rockchip NPU capability required but NPU not detected (continuing in dev mode)"
+                    else
+                        echo "❌ ERROR: Rockchip NPU capability required but NPU not detected"
+                        echo "   Remediation: Ensure running on compatible Rockchip SoC with NPU support"
+                        validation_errors=$((validation_errors + 1))
+                    fi
+                else
+                    echo "✅ Rockchip NPU capability: OK"
+                fi
+                ;;
+            "storage.persistent")
+                # Check for persistent storage (basic check)
+                if [ ! -d /usr/local ] || [ ! -w /usr/local ]; then
+                    if is_dev_mode; then
+                        echo "DEV: Persistent storage capability required but /usr/local not accessible (continuing in dev mode)"
+                    else
+                        echo "❌ ERROR: Persistent storage capability required but /usr/local not accessible"
+                        echo "   Remediation: Ensure /usr/local directory exists and is writable"
+                        validation_errors=$((validation_errors + 1))
+                    fi
+                else
+                    echo "✅ Persistent storage capability: OK"
+                fi
+                ;;
+            "network.udp")
+                # Check if UDP networking is available
+                if ! command -v nc >/dev/null 2>&1 && ! command -v netcat >/dev/null 2>&1; then
+                    echo "ℹ️  UDP networking capability: netcat not available for validation"
+                else
+                    echo "✅ UDP networking capability: OK"
+                fi
+                ;;
+            *)
+                echo "⚠️  Unknown capability requirement: $capability"
+                ;;
+        esac
+    done <<< "$capabilities"
+    
+    return $validation_errors
+}
+
+# Validate memory and storage requirements
+validate_resource_requirements() {
+    local manifest_file="$1"
+    
+    # Memory validation
+    local min_memory=$(jq -r '.requirements.memory.minimum // null' "$manifest_file" 2>/dev/null)
+    local rec_memory=$(jq -r '.requirements.memory.recommended // null' "$manifest_file" 2>/dev/null)
+    
+    if [ "$min_memory" != "null" ] && [ -n "$min_memory" ]; then
+        echo "Checking memory requirements..."
+        
+        # Get available memory in KB
+        local available_memory_kb=$(grep MemAvailable /proc/meminfo 2>/dev/null | awk '{print $2}')
+        if [ -z "$available_memory_kb" ]; then
+            # Fallback to total memory
+            available_memory_kb=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+        fi
+        
+        if [ -n "$available_memory_kb" ]; then
+            local available_memory_bytes=$((available_memory_kb * 1024))
+            local required_memory_bytes=$(parse_size_to_bytes "$min_memory")
+            
+            if [ "$available_memory_bytes" -lt "$required_memory_bytes" ]; then
+                echo "⚠️  WARNING: Insufficient memory for optimal performance"
+                echo "   Required: $min_memory, Available: $((available_memory_kb / 1024))MB"
+                echo "💡 Resolution: Extension may run slowly or fail under load"
+                echo "   - Close other applications to free memory"
+                echo "   - Consider upgrading to a player with more RAM"
+                echo "   - Monitor extension performance during operation"
+            else
+                echo "✅ Memory check: OK (Required: $min_memory, Available: $((available_memory_kb / 1024))MB)"
+            fi
+        fi
+    fi
+    
+    # Storage validation
+    local install_storage=$(jq -r '.requirements.storage.installation // null' "$manifest_file" 2>/dev/null)
+    local runtime_storage=$(jq -r '.requirements.storage.runtime // null' "$manifest_file" 2>/dev/null)
+    
+    if [ "$install_storage" != "null" ] && [ -n "$install_storage" ]; then
+        echo "Checking storage requirements..."
+        
+        # Check available space in /usr/local (where extensions are typically installed)
+        local available_space_kb=$(df /usr/local 2>/dev/null | tail -1 | awk '{print $4}')
+        if [ -n "$available_space_kb" ]; then
+            local available_space_bytes=$((available_space_kb * 1024))
+            local required_install_bytes=$(parse_size_to_bytes "$install_storage")
+            
+            # Add runtime storage if specified
+            if [ "$runtime_storage" != "null" ] && [ -n "$runtime_storage" ]; then
+                local required_runtime_bytes=$(parse_size_to_bytes "$runtime_storage")
+                required_install_bytes=$((required_install_bytes + required_runtime_bytes))
+            fi
+            
+            if [ "$available_space_bytes" -lt "$required_install_bytes" ]; then
+                echo "⚠️  WARNING: Insufficient storage space for installation"
+                echo "   Required: $install_storage, Available: $((available_space_kb / 1024))MB"
+                echo "💡 Resolution: Free up disk space before installation"
+                echo "   - Remove old extensions: 'ls /dev/mapper/bsos-ext_*'"
+                echo "   - Clear temporary files: 'rm -rf /tmp/*'"
+                echo "   - Check disk usage: 'df -h /usr/local'"
+                echo "   - Contact support if space cannot be freed"
+            else
+                echo "✅ Storage check: OK (Required: $install_storage, Available: $((available_space_kb / 1024))MB)"
+            fi
+        fi
+    fi
+}
+
+# Validate system dependencies
+validate_system_dependencies() {
+    local manifest_file="$1"
+    
+    # Check system library dependencies
+    local system_deps=$(jq -r '.requirements.dependencies.system[]? // empty' "$manifest_file" 2>/dev/null)
+    
+    if [ -n "$system_deps" ]; then
+        echo "Checking system dependencies..."
+        
+        while IFS= read -r dependency; do
+            # Check if it's a library
+            if [[ "$dependency" =~ \.so[\.0-9]*$ ]]; then
+                # Check shared library with ldconfig
+                if command -v ldconfig >/dev/null 2>&1; then
+                    if ! ldconfig -p 2>/dev/null | grep -q "$dependency"; then
+                        echo "❌ ERROR: Required system library not found: $dependency"
+                        echo "💡 Resolution: Install missing library"
+                        case "$dependency" in
+                            *opencv*)
+                                echo "   - Install OpenCV: 'apt-get install libopencv-dev' or similar"
+                                echo "   - Verify version compatibility with extension requirements"
+                                ;;
+                            *rknn*)
+                                echo "   - Library should be provided by BrightSign OS"
+                                echo "   - Ensure running on compatible Rockchip-based player"
+                                echo "   - Contact BrightSign support if library missing"
+                                ;;
+                            *)
+                                echo "   - Install via package manager or contact extension provider"
+                                echo "   - Check if library name/version has changed"
+                                ;;
+                        esac
+                    else
+                        echo "✅ Dependency check: OK ($dependency)"
+                    fi
+                else
+                    # Fallback: check in common library paths
+                    if [ ! -f "/lib/$dependency" ] && [ ! -f "/usr/lib/$dependency" ] && [ ! -f "/usr/local/lib/$dependency" ]; then
+                        echo "⚠️  WARNING: Required library not found: $dependency"
+                        echo "   (ldconfig unavailable for detailed check)"
+                        echo "💡 Resolution: Manually verify library is installed in system paths"
+                    fi
+                fi
+            else
+                # Check if it's a binary/command
+                if ! command -v "$dependency" >/dev/null 2>&1; then
+                    echo "❌ ERROR: Required command not found: $dependency"
+                    echo "💡 Resolution: Install missing command/package"
+                    echo "   - Check if package is installed: 'which $dependency'"
+                    echo "   - Install via package manager if available"
+                    echo "   - Verify PATH environment includes command location"
+                else
+                    echo "✅ Dependency check: OK ($dependency)"
+                fi
+            fi
+        done <<< "$system_deps"
+    fi
+    
+    # Check kernel modules (if any are specified in a future extension)
+    local kernel_modules=$(jq -r '.requirements.dependencies.kernelModules[]? // empty' "$manifest_file" 2>/dev/null)
+    
+    if [ -n "$kernel_modules" ]; then
+        echo "Checking kernel module dependencies..."
+        
+        while IFS= read -r module; do
+            if ! lsmod | grep -q "^$module "; then
+                echo "WARNING: Required kernel module not loaded: $module"
+            else
+                echo "Kernel module check: OK ($module)"
+            fi
+        done <<< "$kernel_modules"
+    fi
+}
+
+# Validate extension dependencies
+validate_extension_dependencies() {
+    local manifest_file="$1"
+    
+    # Check extension dependencies
+    local extension_deps=$(jq -c '.requirements.dependencies.extensions[]? // empty' "$manifest_file" 2>/dev/null)
+    
+    if [ -n "$extension_deps" ]; then
+        echo "Checking extension dependencies..."
+        
+        while IFS= read -r dep; do
+            local dep_id=$(echo "$dep" | jq -r '.id // empty')
+            local dep_version=$(echo "$dep" | jq -r '.version // empty')
+            
+            if [ -n "$dep_id" ]; then
+                # Look for the dependency extension
+                local found_extension=false
+                local found_version=""
+                
+                # Check common extension locations
+                for ext_path in "/var/volatile/bsext/"* "/usr/local/"*; do
+                    if [ -d "$ext_path" ] && [ -f "$ext_path/manifest.json" ]; then
+                        local ext_id=$(jq -r '.extension.id // empty' "$ext_path/manifest.json" 2>/dev/null)
+                        if [ "$ext_id" = "$dep_id" ]; then
+                            found_extension=true
+                            found_version=$(jq -r '.extension.version // "unknown"' "$ext_path/manifest.json" 2>/dev/null)
+                            break
+                        fi
+                    fi
+                done
+                
+                if [ "$found_extension" = "false" ]; then
+                    echo "ERROR: Required extension not found: $dep_id"
+                else
+                    # Check version compatibility if specified
+                    if [ -n "$dep_version" ] && [ "$dep_version" != "empty" ]; then
+                        if version_matches_range "$found_version" "$dep_version"; then
+                            echo "Extension dependency check: OK ($dep_id v$found_version matches $dep_version)"
+                        else
+                            echo "WARNING: Extension version mismatch: $dep_id v$found_version does not match requirement $dep_version"
+                        fi
+                    else
+                        echo "Extension dependency check: OK ($dep_id v$found_version)"
+                    fi
+                fi
+            fi
+        done <<< "$extension_deps"
+    fi
+}
+
+# Check if development mode is enabled
+is_dev_mode() {
+    # Check environment variable
+    if [[ "${BSEXT_DEV_MODE,,}" =~ ^(true|yes|1|on)$ ]]; then
+        return 0
+    fi
+    
+    # Check for dev mode file
+    if [ -f "${SCRIPT_PATH}/.dev-mode" ]; then
+        return 0
+    fi
+    
+    return 1
+}
+
+# Validate manifest.json if present
+validate_manifest() {
+    local manifest_file="${SCRIPT_PATH}/manifest.json"
+    
+    # Check if manifest exists
+    if [ ! -f "$manifest_file" ]; then
+        echo "INFO: No manifest.json found, skipping validation"
+        return 0
+    fi
+    
+    if is_dev_mode; then
+        echo "🔧 Development mode enabled - relaxed validation"
+    fi
+    
+    echo "Validating manifest.json..."
+    
+    # Check if jq is available for parsing
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "⚠️  WARNING: jq utility not found, skipping advanced manifest validation"
+        echo "💡 Resolution: Install jq for complete validation"
+        echo "   - Install jq: 'apt-get install jq' or equivalent"
+        echo "   - Basic validation will continue without jq"
+        echo "   - Some compatibility checks may be skipped"
+        return 0
+    fi
+    
+    # Parse manifest
+    local manifest_version=$(jq -r '.manifestVersion // 0' "$manifest_file" 2>/dev/null)
+    if [ "$manifest_version" != "1" ]; then
+        echo "WARNING: Unknown manifest version: $manifest_version"
+        return 0
+    fi
+    
+    # Check OS version compatibility
+    local min_os=$(jq -r '.compatibility.osVersion.min // "0.0.0"' "$manifest_file" 2>/dev/null)
+    local max_os=$(jq -r '.compatibility.osVersion.max // null' "$manifest_file" 2>/dev/null)
+    
+    # Get current OS version
+    local current_os="0.0.0"
+    if [ -f /etc/os-release ]; then
+        current_os=$(grep VERSION_ID /etc/os-release | cut -d= -f2 | tr -d '"')
+    fi
+    
+    # Check minimum version
+    if ! version_compare "$current_os" "$min_os"; then
+        if is_dev_mode; then
+            echo "🔧 DEV: OS version $current_os is below minimum required version $min_os (continuing in dev mode)"
+        else
+            echo "⚠️  WARNING: OS version compatibility issue"
+            echo "   Current: $current_os, Required minimum: $min_os"
+            echo "💡 Resolution: Update BrightSign OS to supported version"
+            echo "   - Check for OS updates in BrightSign settings"
+            echo "   - Download latest OS from BrightSign support portal"
+            echo "   - Extension may not function correctly on older OS versions"
+            echo "   - Contact support if unable to update OS"
+        fi
+    fi
+    
+    # Check maximum version if specified
+    if [ "$max_os" != "null" ] && [ -n "$max_os" ]; then
+        if version_compare "$current_os" "$max_os" && [ "$current_os" != "$max_os" ]; then
+            if is_dev_mode; then
+                echo "🔧 DEV: OS version $current_os exceeds maximum tested version $max_os (continuing in dev mode)"
+            else
+                echo "⚠️  WARNING: OS version newer than tested maximum"
+                echo "   Current: $current_os, Maximum tested: $max_os"
+                echo "💡 Resolution: Extension may work but hasn't been tested on this OS version"
+                echo "   - Monitor extension functionality carefully"
+                echo "   - Report any issues to extension developer"
+                echo "   - Consider downgrading OS if critical issues occur"
+                echo "   - Check for updated extension version"
+            fi
+        fi
+    fi
+    
+    # Check SOC compatibility
+    local current_soc=$(get_soc_name)
+    local supported_socs=$(jq -r '.compatibility.soc[]?.id // empty' "$manifest_file" 2>/dev/null)
+    
+    if [ -n "$supported_socs" ]; then
+        local soc_supported=false
+        while IFS= read -r soc; do
+            if [ "$soc" = "$current_soc" ]; then
+                soc_supported=true
+                break
+            fi
+        done <<< "$supported_socs"
+        
+        if [ "$soc_supported" = "false" ]; then
+            if is_dev_mode; then
+                echo "🔧 DEV: Current SOC $current_soc is not listed as supported (continuing in dev mode)"
+            else
+                echo "⚠️  WARNING: Hardware compatibility issue"
+                echo "   Current SOC: $current_soc (not in supported list)"
+                echo "💡 Resolution: Verify hardware compatibility"
+                echo "   - Supported SOCs: RK3588 (XT-5), RK3568 (LS-5), RK3576 (Firebird)"
+                echo "   - Extension may not function on unsupported hardware"
+                echo "   - Contact extension developer for hardware support"
+                echo "   - Check for updated extension with broader hardware support"
+            fi
+        fi
+    fi
+    
+    # Hardware capability validation
+    local hw_errors=0
+    validate_hardware_requirements "$manifest_file"
+    hw_errors=$?
+    
+    # Memory and storage validation
+    local resource_errors=0
+    validate_resource_requirements "$manifest_file"
+    resource_errors=$?
+    
+    # System dependency validation
+    local sys_errors=0
+    validate_system_dependencies "$manifest_file"
+    sys_errors=$?
+    
+    # Extension dependency validation
+    local ext_errors=0
+    validate_extension_dependencies "$manifest_file"
+    ext_errors=$?
+    
+    # Calculate total validation errors
+    local total_errors=$((hw_errors + resource_errors + sys_errors + ext_errors))
+    
+    # Display extension info and validation summary
+    local ext_name=$(jq -r '.extension.name // "Unknown"' "$manifest_file" 2>/dev/null)
+    local ext_version=$(jq -r '.extension.version // "Unknown"' "$manifest_file" 2>/dev/null)
+    echo ""
+    echo "Extension: $ext_name v$ext_version"
+    
+    if [ $total_errors -eq 0 ]; then
+        echo "✅ Manifest validation: PASSED"
+    else
+        if is_dev_mode; then
+            echo "🔧 Manifest validation: $total_errors error(s) found (continuing in development mode)"
+        else
+            echo "❌ Manifest validation: FAILED ($total_errors error(s))"
+            echo ""
+            echo "Extension startup may fail due to validation errors."
+            echo "Enable development mode to bypass: export BSEXT_DEV_MODE=true"
+            return $total_errors
+        fi
+    fi
+    
+    return 0
+}
 
 # Common function to run the attention demo
 run_yolo_demo() {
@@ -172,9 +732,142 @@ do_stop() {
     rm -f ${PIDFILE}
 }
 
+# Configuration backup and restore functions for Phase 3
+backup_configuration() {
+    local backup_name="${1:-backup_$(date +%Y%m%d_%H%M%S)}"
+    local backup_dir="/var/backups/extensions/${DAEMON_NAME}/${backup_name}"
+    
+    echo "📦 Backing up extension configuration..."
+    
+    # Create backup directory
+    mkdir -p "$backup_dir"
+    
+    # Store timestamp
+    date -u +"%Y-%m-%dT%H:%M:%SZ" > "$backup_dir/timestamp"
+    
+    # Export registry settings
+    if command -v registry >/dev/null 2>&1; then
+        local registry_backup="$backup_dir/registry-backup.json"
+        if registry export extension > "$registry_backup" 2>/dev/null; then
+            echo "✅ Registry configuration backed up"
+        else
+            echo "⚠️  Warning: Failed to backup registry configuration"
+        fi
+    else
+        echo "⚠️  Warning: Registry command not available"
+    fi
+    
+    # Backup user data directories
+    local data_dirs=("/tmp/yolo_output" "/var/log/bsext-yolo" "/tmp/results.json" "/tmp/output.jpg")
+    for data_path in "${data_dirs[@]}"; do
+        if [[ -e "$data_path" ]]; then
+            local data_name=$(basename "$data_path")
+            local backup_path="$backup_dir/$data_name"
+            
+            if [[ -d "$data_path" ]]; then
+                cp -r "$data_path" "$backup_path" 2>/dev/null && echo "✅ Backed up directory: $data_name"
+            elif [[ -f "$data_path" ]]; then
+                cp "$data_path" "$backup_path" 2>/dev/null && echo "✅ Backed up file: $data_name"
+            fi
+        fi
+    done
+    
+    # Store current manifest version for reference
+    if [[ -f "${SCRIPT_PATH}/manifest.json" ]]; then
+        cp "${SCRIPT_PATH}/manifest.json" "$backup_dir/manifest.json"
+    fi
+    
+    echo "✅ Configuration backup completed: $backup_dir"
+}
+
+restore_configuration() {
+    local backup_name="$1"
+    local backup_dir="/var/backups/extensions/${DAEMON_NAME}"
+    
+    if [[ -z "$backup_name" ]]; then
+        # Find latest backup
+        backup_name=$(find "$backup_dir" -name "backup_*" -type d 2>/dev/null | sort -r | head -1 | xargs basename 2>/dev/null)
+        if [[ -z "$backup_name" ]]; then
+            echo "❌ No configuration backups found"
+            return 1
+        fi
+    fi
+    
+    local restore_dir="$backup_dir/$backup_name"
+    
+    if [[ ! -d "$restore_dir" ]]; then
+        echo "❌ Backup not found: $backup_name"
+        return 1
+    fi
+    
+    echo "📦 Restoring configuration from backup: $backup_name"
+    
+    # Show backup info
+    if [[ -f "$restore_dir/timestamp" ]]; then
+        local backup_time=$(cat "$restore_dir/timestamp")
+        echo "   Created: $backup_time"
+    fi
+    
+    # Restore registry settings
+    local registry_backup="$restore_dir/registry-backup.json"
+    if [[ -f "$registry_backup" ]] && command -v registry >/dev/null 2>&1; then
+        if registry import extension < "$registry_backup" 2>/dev/null; then
+            echo "✅ Registry configuration restored"
+        else
+            echo "⚠️  Warning: Failed to restore registry configuration"
+        fi
+    fi
+    
+    # Restore user data
+    for backup_item in "$restore_dir"/*; do
+        if [[ -d "$backup_item" ]] || [[ -f "$backup_item" ]]; then
+            local item_name=$(basename "$backup_item")
+            case "$item_name" in
+                "timestamp"|"registry-backup.json"|"manifest.json")
+                    continue  # Skip metadata files
+                    ;;
+                *)
+                    local restore_path="/tmp/$item_name"
+                    if [[ -d "$backup_item" ]]; then
+                        rm -rf "$restore_path" 2>/dev/null || true
+                        cp -r "$backup_item" "$restore_path" 2>/dev/null && echo "✅ Restored directory: $item_name"
+                    elif [[ -f "$backup_item" ]]; then
+                        cp "$backup_item" "$restore_path" 2>/dev/null && echo "✅ Restored file: $item_name"
+                    fi
+                    ;;
+            esac
+        fi
+    done
+    
+    echo "✅ Configuration restore completed"
+}
+
+list_backups() {
+    local backup_dir="/var/backups/extensions/${DAEMON_NAME}"
+    
+    echo "📋 Available configuration backups for ${DAEMON_NAME}:"
+    
+    if [[ ! -d "$backup_dir" ]]; then
+        echo "   No backups found"
+        return 0
+    fi
+    
+    find "$backup_dir" -name "backup_*" -type d 2>/dev/null | sort -r | while read -r backup_path; do
+        local backup_name=$(basename "$backup_path")
+        local timestamp="unknown"
+        
+        if [[ -f "$backup_path/timestamp" ]]; then
+            timestamp=$(cat "$backup_path/timestamp")
+        fi
+        
+        echo "   - $backup_name (created: $timestamp)"
+    done
+}
+
 case "$1" in
     start)
         echo "Starting ${DAEMON_NAME}"
+        validate_manifest
         do_start
         ;;
     stop)
@@ -188,11 +881,56 @@ case "$1" in
         ;;
     run)
         echo "Running ${DAEMON_NAME} in foreground"
+        validate_manifest
         # Run directly in foreground (not as daemon)
         run_yolo_demo false
         ;;
+    backup)
+        echo "Creating configuration backup for ${DAEMON_NAME}"
+        backup_configuration "$2"
+        ;;
+    restore)
+        echo "Restoring configuration for ${DAEMON_NAME}"
+        restore_configuration "$2"
+        ;;
+    list-backups)
+        list_backups
+        ;;
+    dev|--dev|--dev-mode)
+        echo "Enabling development mode"
+        export BSEXT_DEV_MODE=true
+        echo "🔧 Development mode enabled via command line"
+        # If second argument provided, run that command
+        if [ -n "$2" ]; then
+            shift
+            exec "$0" "$@"
+        else
+            echo "Usage: $0 dev {start|stop|restart|run|backup|restore|list-backups}"
+            echo "Development mode is now enabled for subsequent commands"
+        fi
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|run}"
+        echo "Usage: $0 {start|stop|restart|run|dev|backup|restore|list-backups}"
+        echo ""
+        echo "Commands:"
+        echo "  start         - Start extension as daemon"
+        echo "  stop          - Stop extension daemon"  
+        echo "  restart       - Restart extension daemon"
+        echo "  run           - Run extension in foreground"
+        echo "  dev           - Enable development mode (relaxed validation)"
+        echo "  backup [name] - Create configuration backup (optional custom name)"
+        echo "  restore [name]- Restore from configuration backup (latest if name not specified)"
+        echo "  list-backups  - List available configuration backups"
+        echo ""
+        echo "Configuration Management:"
+        echo "  backup                  - Create backup with auto-generated name"
+        echo "  backup my_backup_name   - Create backup with custom name"
+        echo "  restore                 - Restore from latest backup"
+        echo "  restore my_backup_name  - Restore from specific backup"
+        echo ""
+        echo "Development Mode:"
+        echo "  Set BSEXT_DEV_MODE=true or use 'dev' command"
+        echo "  Creates .dev-mode file: touch ${SCRIPT_PATH}/.dev-mode"
         exit 1
         ;;
 esac

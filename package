@@ -309,6 +309,166 @@ copy_models() {
     done
 }
 
+# Generate manifest.json from manifest-config.json
+generate_manifest() {
+    log "Generating manifest.json..."
+    
+    # Check if manifest-config.json exists
+    if [[ ! -f "manifest-config.json" ]]; then
+        warn "manifest-config.json not found. Creating from template..."
+        if [[ -f "manifest-config.template.json" ]]; then
+            cp manifest-config.template.json manifest-config.json
+            warn "Please edit manifest-config.json with your extension information"
+        else
+            error "manifest-config.json and template not found"
+        fi
+    fi
+    
+    # Read configuration
+    local config_content=$(cat manifest-config.json)
+    
+    # Get build information
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    local commit_hash=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    local sdk_version="unknown"
+    
+    # Try to determine SDK version from environment or installed SDK
+    if [[ -n "${OECORE_SDK_VERSION}" ]]; then
+        sdk_version="brightsign-sdk-${OECORE_SDK_VERSION}"
+    elif [[ -f "sdk/version-*" ]]; then
+        sdk_version=$(basename sdk/version-* | sed 's/version-/brightsign-sdk-/')
+    fi
+    
+    # Determine which SOCs are being packaged
+    local soc_array="[]"
+    local soc_json_items=()
+    for soc in "${!SOC_PLATFORMS[@]}"; do
+        if [[ -n "$SPECIFIC_SOC" && "$SPECIFIC_SOC" != "$soc" ]]; then
+            continue
+        fi
+        
+        local platform="${SOC_PLATFORMS[$soc]}"
+        if [[ -d "staging/$soc" ]]; then
+            local experimental="false"
+            if [[ "$soc" == "RK3576" ]]; then
+                experimental="true"
+            fi
+            soc_json_items+=("    {\"id\": \"$soc\", \"platforms\": [\"$platform\"], \"minRevision\": \"1.0\", \"experimental\": $experimental}")
+        fi
+    done
+    
+    if [[ ${#soc_json_items[@]} -gt 0 ]]; then
+        soc_array="[\n"
+        soc_array+=$(printf '%s,\n' "${soc_json_items[@]}" | sed '$ s/,$//')
+        soc_array+="\n  ]"
+    fi
+    
+    # Determine player compatibility based on SOCs
+    local players_array="[]"
+    if [[ "$soc_array" != "[]" ]]; then
+        local player_items=()
+        
+        # RK3588 -> Series 5 XT players
+        if [[ "$soc_array" =~ "RK3588" ]]; then
+            player_items+=("    {\"series\": \"5\", \"models\": [\"XT1145\", \"XT2145\"], \"features\": [\"npu\"]}")
+        fi
+        
+        # RK3568 -> Series 5 LS players  
+        if [[ "$soc_array" =~ "RK3568" ]]; then
+            player_items+=("    {\"series\": \"5\", \"models\": [\"LS445\"], \"features\": [\"npu\"]}")
+        fi
+        
+        # RK3576 -> Firebird development boards
+        if [[ "$soc_array" =~ "RK3576" ]]; then
+            player_items+=("    {\"series\": \"firebird\", \"models\": [\"dev\"], \"features\": [\"npu\"], \"experimental\": true}")
+        fi
+        
+        if [[ ${#player_items[@]} -gt 0 ]]; then
+            players_array="[\n"
+            players_array+=$(printf '%s,\n' "${player_items[@]}" | sed '$ s/,$//')
+            players_array+="\n  ]"
+        fi
+    fi
+    
+    # Extract key fields from config using jq
+    local version=$(echo "$config_content" | jq -r '.extension.version // "1.0.0"')
+    local description=$(echo "$config_content" | jq -r '.extension.description // "BrightSign Extension"')
+    local author=$(echo "$config_content" | jq -c '.extension.author // {"name": "Unknown"}')
+    local license=$(echo "$config_content" | jq -r '.extension.license // "Proprietary"')
+    local homepage=$(echo "$config_content" | jq -r '.extension.homepage // ""')
+    local category=$(echo "$config_content" | jq -r '.extension.category // "utility"')
+    
+    # Extract compatibility info
+    local os_min=$(echo "$config_content" | jq -r '.compatibility.osVersion.min // "9.0.0"')
+    local os_target=$(echo "$config_content" | jq -r '.compatibility.osVersion.target // "9.1.0"')
+    local os_max=$(echo "$config_content" | jq -r '.compatibility.osVersion.max // null')
+    
+    # Build OS version object
+    local os_version_obj="{\"min\": \"$os_min\", \"target\": \"$os_target\""
+    if [[ "$os_max" != "null" ]]; then
+        os_version_obj+=", \"max\": \"$os_max\""
+    fi
+    os_version_obj+="}"
+    
+    # Extract other sections
+    local requirements=$(echo "$config_content" | jq -c '.requirements // {}')
+    local runtime=$(echo "$config_content" | jq -c '.runtime // {}')
+    local registry=$(echo "$config_content" | jq -c '.registry // {}')
+    local update=$(echo "$config_content" | jq -c '.update // {}')
+    
+    # Build the manifest JSON
+    cat > staging/manifest.json <<EOF
+{
+  "\$schema": "https://brightsign.biz/schemas/extension-manifest/v1.json",
+  "manifestVersion": 1,
+  
+  "extension": {
+    "id": "com.brightsign.yolo-object-detection",
+    "name": "YOLO Object Detection",
+    "shortName": "YOLO",
+    "version": "$version",
+    "description": "$description",
+    "author": $author,
+    "license": "$license",
+    "homepage": "$homepage",
+    "category": "$category"
+  },
+  
+  "compatibility": {
+    "osVersion": $os_version_obj,
+    "players": $players_array,
+    "soc": $soc_array
+  },
+  
+  "requirements": $requirements,
+  
+  "runtime": $runtime,
+  
+  "registry": $registry,
+  
+  "update": $update,
+  
+  "build": {
+    "timestamp": "$timestamp",
+    "sdk": "$sdk_version",
+    "commit": "$commit_hash"
+  }
+}
+EOF
+
+    # Validate the generated manifest
+    if command -v jq >/dev/null 2>&1; then
+        if jq empty staging/manifest.json 2>/dev/null; then
+            success "manifest.json generated and validated"
+        else
+            error "Generated manifest.json is not valid JSON"
+        fi
+    else
+        warn "jq not installed, skipping manifest validation"
+        success "manifest.json generated"
+    fi
+}
+
 # Add extension management scripts
 copy_extension_scripts() {
     log "Adding extension management scripts..."
@@ -319,6 +479,15 @@ copy_extension_scripts() {
     # Copy uninstall script
     if [[ -f "sh/uninstall.sh" ]]; then
         cp sh/uninstall.sh staging/ && chmod +x staging/uninstall.sh
+    fi
+
+    # Copy schema file for offline validation
+    if [[ -f "schemas/extension-manifest-v1.json" ]]; then
+        mkdir -p staging/schemas
+        cp schemas/extension-manifest-v1.json staging/schemas/
+        log "Schema file bundled for offline validation"
+    else
+        warn "Schema file not found, skipping schema bundling"
     fi
 
     success "Extension scripts added"
@@ -335,6 +504,8 @@ verify_package() {
     local essential_files=(
         "bsext_init"
         "uninstall.sh"
+        "manifest.json"
+        "schemas/extension-manifest-v1.json"
     )
 
     for file in "${essential_files[@]}"; do
@@ -405,6 +576,177 @@ verify_package() {
     # Show package size
     local package_size=$(du -sh staging/ 2>/dev/null | cut -f1)
     log "Package size: $package_size"
+}
+
+# Enhanced host-side validation for Phase 3
+validate_manifest_schema() {
+    log "Validating manifest.json schema..."
+    
+    local manifest_file="staging/manifest.json"
+    local schema_file="schemas/extension-manifest-v1.json"
+    
+    if [[ ! -f "$manifest_file" ]]; then
+        error "manifest.json not found in staging directory"
+        return 1
+    fi
+    
+    # Basic JSON syntax validation
+    if ! jq empty "$manifest_file" 2>/dev/null; then
+        error "manifest.json contains invalid JSON syntax"
+        return 1
+    fi
+    
+    # Schema validation if available
+    if [[ -f "$schema_file" ]] && command -v jq >/dev/null 2>&1; then
+        # Note: jq doesn't have built-in JSON schema validation
+        # For now, we'll do basic structural validation
+        local required_fields=("manifestVersion" "extension" "compatibility")
+        
+        for field in "${required_fields[@]}"; do
+            if [[ $(jq -r ".$field // empty" "$manifest_file") == "" ]]; then
+                error "Required field missing in manifest.json: $field"
+                return 1
+            fi
+        done
+        
+        success "Manifest schema validation passed"
+    else
+        warn "Schema validation skipped (schema file or jq not available)"
+    fi
+    
+    return 0
+}
+
+# Validate package size against storage requirements
+validate_package_size() {
+    log "Validating package size against requirements..."
+    
+    local manifest_file="staging/manifest.json"
+    
+    if [[ ! -f "$manifest_file" ]]; then
+        warn "No manifest.json found, skipping size validation"
+        return 0
+    fi
+    
+    # Get declared installation size requirement
+    local declared_size=$(jq -r '.requirements.storage.installation // "unknown"' "$manifest_file" 2>/dev/null)
+    
+    if [[ "$declared_size" == "unknown" || "$declared_size" == "null" ]]; then
+        warn "No installation size declared in manifest, skipping size validation"
+        return 0
+    fi
+    
+    # Calculate actual package size in bytes
+    local actual_size_kb=$(du -sk staging/ | cut -f1)
+    local actual_size_mb=$((actual_size_kb / 1024))
+    
+    # Parse declared size (assumes format like "150MB")
+    local declared_size_num=$(echo "$declared_size" | sed 's/[^0-9]//g')
+    local declared_size_unit=$(echo "$declared_size" | sed 's/[0-9]//g')
+    
+    # Convert declared size to MB for comparison
+    local declared_size_mb="$declared_size_num"
+    if [[ "$declared_size_unit" == "GB" ]]; then
+        declared_size_mb=$((declared_size_num * 1024))
+    elif [[ "$declared_size_unit" == "KB" ]]; then
+        declared_size_mb=$((declared_size_num / 1024))
+    fi
+    
+    # Check if actual size exceeds declared size by more than 10%
+    local size_limit=$((declared_size_mb * 110 / 100))  # 10% tolerance
+    
+    if [[ $actual_size_mb -gt $size_limit ]]; then
+        warn "Package size (${actual_size_mb}MB) exceeds declared requirement (${declared_size}) by >10%"
+        warn "Consider updating manifest.json storage requirements or reducing package size"
+    else
+        success "Package size validation passed (${actual_size_mb}MB <= ${declared_size})"
+    fi
+    
+    return 0
+}
+
+# Validate cross-platform consistency
+validate_platform_consistency() {
+    log "Validating cross-platform consistency..."
+    
+    local errors=0
+    
+    # Check that all expected SOCs have binaries and models
+    for soc in "${!SOC_PLATFORMS[@]}"; do
+        if [[ -n "$SPECIFIC_SOC" && "$SPECIFIC_SOC" != "$soc" ]]; then
+            continue
+        fi
+        
+        local soc_dir="staging/$soc"
+        if [[ ! -d "$soc_dir" ]]; then
+            continue  # Skip if SOC directory doesn't exist
+        fi
+        
+        # Validate binary exists and is executable
+        if [[ ! -f "$soc_dir/yolo_demo" ]]; then
+            warn "Missing binary for $soc: $soc_dir/yolo_demo"
+            ((errors++))
+        elif [[ ! -x "$soc_dir/yolo_demo" ]]; then
+            warn "Binary not executable for $soc: $soc_dir/yolo_demo"
+            ((errors++))
+        fi
+        
+        # Validate model consistency across platforms
+        local expected_models=()
+        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolov8" ]]; then
+            expected_models+=("yolov8n.rknn")
+        fi
+        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolox" ]]; then
+            expected_models+=("yolox_s.rknn")
+        fi
+        
+        for model in "${expected_models[@]}"; do
+            if [[ ! -f "$soc_dir/model/$model" ]]; then
+                warn "Missing model for $soc: $soc_dir/model/$model"
+                ((errors++))
+            fi
+        done
+    done
+    
+    if [[ $errors -eq 0 ]]; then
+        success "Platform consistency validation passed"
+    else
+        warn "Platform consistency validation found $errors issues"
+    fi
+    
+    return $errors
+}
+
+# Enhanced validation combining all checks
+enhanced_validation() {
+    log "Running enhanced Phase 3 validation..."
+    
+    local total_errors=0
+    
+    # Schema validation
+    validate_manifest_schema
+    total_errors=$((total_errors + $?))
+    
+    # Size validation  
+    validate_package_size
+    total_errors=$((total_errors + $?))
+    
+    # Platform consistency validation
+    validate_platform_consistency
+    total_errors=$((total_errors + $?))
+    
+    # Existing package structure validation
+    verify_package
+    # Note: verify_package doesn't return error codes, so we don't add to total_errors
+    
+    if [[ $total_errors -eq 0 ]]; then
+        success "All enhanced validations passed"
+    else
+        warn "Enhanced validation completed with $total_errors errors/warnings"
+        warn "Review issues above before deploying to production"
+    fi
+    
+    return $total_errors
 }
 
 # Create development package
@@ -511,10 +853,11 @@ main() {
     create_package_structure
     copy_binaries
     copy_models
+    generate_manifest
     copy_extension_scripts
     echo ""
 
-    verify_package
+    enhanced_validation
     echo ""
 
     # Create packages based on options
