@@ -86,6 +86,42 @@ success() {
     echo -e "${GREEN}✅ $1${NC}"
 }
 
+# Check for schema updates
+check_schema_version() {
+    log "Checking extension manifest schema version..."
+    
+    local schema_url="https://brightsign.biz/schemas/extension-manifest/v1.json"
+    local local_schema="schemas/extension-manifest-v1.json"
+    
+    # Check if local schema exists
+    if [[ ! -f "$local_schema" ]]; then
+        warn "Local schema file not found at $local_schema"
+        return 0
+    fi
+    
+    # Try to fetch remote schema (with timeout)
+    if command -v curl >/dev/null 2>&1; then
+        log "Checking for schema updates (5 second timeout)..."
+        if curl -s --connect-timeout 5 --max-time 10 "$schema_url" > /tmp/remote_schema.json 2>/dev/null; then
+            # Compare schemas if both exist
+            if ! diff -q "$local_schema" /tmp/remote_schema.json >/dev/null 2>&1; then
+                warn "Newer schema version available online"
+                warn "Local:  $(jq -r '.$schema // "unknown"' "$local_schema" 2>/dev/null || echo "unknown")"
+                warn "Remote: $(jq -r '.$schema // "unknown"' /tmp/remote_schema.json 2>/dev/null || echo "unknown")"
+                warn "Consider updating your local schema before packaging extensions"
+                echo ""
+            else
+                log "Schema is up to date"
+            fi
+            rm -f /tmp/remote_schema.json
+        else
+            log "Could not check for schema updates (offline or timeout)"
+        fi
+    else
+        log "curl not available, skipping schema update check"
+    fi
+}
+
 # Prerequisites check
 check_prerequisites() {
     log "Checking prerequisites..."
@@ -268,6 +304,7 @@ main() {
     start_time=$(date +%s)
     
     check_prerequisites
+    check_schema_version
     clone_rknn_toolkit
     setup_docker
     
