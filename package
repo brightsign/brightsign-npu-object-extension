@@ -358,9 +358,11 @@ generate_manifest() {
     done
     
     if [[ ${#soc_json_items[@]} -gt 0 ]]; then
-        soc_array="[\n"
+        soc_array="[
+"
         soc_array+=$(printf '%s,\n' "${soc_json_items[@]}" | sed '$ s/,$//')
-        soc_array+="\n  ]"
+        soc_array+="
+  ]"
     fi
     
     # Determine player compatibility based on SOCs
@@ -384,9 +386,11 @@ generate_manifest() {
         fi
         
         if [[ ${#player_items[@]} -gt 0 ]]; then
-            players_array="[\n"
+            players_array="[
+"
             players_array+=$(printf '%s,\n' "${player_items[@]}" | sed '$ s/,$//')
-            players_array+="\n  ]"
+            players_array+="
+  ]"
         fi
     fi
     
