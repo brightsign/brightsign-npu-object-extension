@@ -47,7 +47,16 @@
       "Bash(./sh/rollback-extension.sh:*)",
       "Bash(./bsext_init --help)",
       "Bash(./bsext_init help)",
-      "Bash(./bsext_init)"
+      "Bash(./bsext_init)",
+      "Bash(git rebase:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(./runall.sh:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(./compile-models:*)",
+      "Bash(./package --dev-only)",
+      "Bash(./package)",
+      "Bash(check_schema_version)"
     ],
     "deny": []
   }
