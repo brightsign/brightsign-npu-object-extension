@@ -92,7 +92,7 @@ jobs:
       - name: Compile models
         if: ${{ inputs.build-models == true }}
         run: |
-          ./compile-models
+          ./compile-models -q
           tar -czf install-models.tgz install
           aws s3 cp install-models.tgz ${{ env.S3_URL }}/models/install-models.tgz
 
