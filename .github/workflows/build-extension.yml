@@ -68,6 +68,8 @@ jobs:
         if: ${{ env.IMAGE_EXISTS == 'true' }}
         run: |
           docker pull ${{ steps.login-ecr.outputs.registry }}/${{ env.DOCKER_IMAGE }}:${{ env.BRIGHTSIGN_OS_VERSION }}
+          mkdir -p srv
+          chmod 777 srv
 
       - name: Set up Docker Buildx
         if: ${{ env.IMAGE_EXISTS == 'false' }}
