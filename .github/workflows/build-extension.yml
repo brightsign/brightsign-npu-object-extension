@@ -90,25 +90,25 @@ jobs:
           docker tag ${{ steps.login-ecr.outputs.registry }}/${{ env.DOCKER_IMAGE }}:${{ env.BRIGHTSIGN_OS_VERSION }} ${{ env.DOCKER_IMAGE }}
 
       - name: Compile models
-        if: ${{ inputs.build-models == 'true' }}
+        if: ${{ inputs.build-models == true }}
         run: |
           ./compile-models
           tar -czf install-models.tgz install
           aws s3 cp install-models.tgz ${{ env.S3_URL }}/models/install-models.tgz
 
       - name: Download models
-        if: ${{ inputs.build-models == 'false' }}
+        if: ${{ inputs.build-models == false }}
         run: |
           aws s3 ls ${{ env.S3_URL }}/models/install-models.tgz && aws s3 cp ${{ env.S3_URL }}/models/install-models.tgz . &&  tar -xzf install-models.tgz || ./compile-models && tar -czf install-models.tgz install && aws s3 cp install-models.tgz ${{ env.S3_URL }}/models/install-models.tgz
 
       - name: Compile SDK
-        if: ${{ inputs.build-sdk == 'true' }}
+        if: ${{ inputs.build-sdk == true }}
         run: |
           ./build --extract-sdk
           aws s3 cp ./brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh ${{ env.S3_URL }}/sdk/
 
       - name: Get SDK
-        if: ${{ inputs.build-sdk == 'false' }}
+        if: ${{ inputs.build-sdk == false }}
         run: |
           aws s3 ls ${{ env.S3_URL }}/sdk/brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh && aws s3 cp ${{ env.S3_URL }}/sdk/brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh . || ./build --extract-sdk && aws s3 cp ./brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh ${{ env.S3_URL }}/sdk/ 
 
