@@ -225,7 +225,7 @@ compile_model() {
     fi
     
     # Run Docker compilation
-    local docker_cmd="docker run -it --rm -v \$(pwd):/zoo rknn_tk2 /bin/bash \
+    local docker_cmd="docker run -t --rm -v \$(pwd):/zoo rknn_tk2 /bin/bash \
         -c \"cd /zoo/examples/${model_type}/python && python convert.py ../model/${model_file} ${soc} i8 ../model/${soc^^}/${model_file%.onnx}.rknn\""
     
     if [ "$QUIET" = true ]; then
