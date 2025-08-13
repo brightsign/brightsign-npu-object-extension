@@ -225,14 +225,13 @@ compile_model() {
     fi
     
     # Run Docker compilation
-    # Check if we have a TTY available
+    # Check if we have a TTY available and not in quiet mode
     local docker_flags="--rm"
-    if [ -t 0 ]; then
+    if [ -t 0 ] && [ "$QUIET" != true ]; then
         docker_flags="-it --rm"
     fi
     
-    local docker_cmd="docker run ${docker_flags} -v \$(pwd):/zoo rknn_tk2 /bin/bash \
-        -c \"cd /zoo/examples/${model_type}/python && python convert.py ../model/${model_file} ${soc} i8 ../model/${soc^^}/${model_file%.onnx}.rknn\""
+    local docker_cmd="docker run ${docker_flags} -v \$(pwd):/zoo rknn_tk2 /bin/bash -c \"cd /zoo/examples/${model_type}/python && python convert.py ../model/${model_file} ${soc} i8 ../model/${soc^^}/${model_file%.onnx}.rknn\""
     
     if [ "$QUIET" = true ]; then
         eval "$docker_cmd > /dev/null 2>&1" || error "Failed to compile $model_type for $platform"
