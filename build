@@ -154,20 +154,17 @@ if [ "$QUIET" = true ]; then
 fi
 
 # Prepare Docker run command with bind mounts
-DOCKER_CMD="docker run --rm \
-    -v \"${SCRIPT_DIR}/srv:/srv\" \
-    -w /home/builder/bsoe/brightsign-oe/build \
-    bsoe-build"
+DOCKER_CMD="docker run --rm"
+DOCKER_CMD="$DOCKER_CMD -v \"${SCRIPT_DIR}/srv:/srv\""
+DOCKER_CMD="$DOCKER_CMD -w /home/builder/bsoe/brightsign-oe/build"
 
 # Add patch volume only if patches will be applied
 if [ "$NO_PATCH" != true ]; then
-    DOCKER_CMD="docker run --rm \
-        -v \"${SCRIPT_DIR}/bsoe-recipes:/home/builder/patches:ro\" \
-        -v \"${SCRIPT_DIR}/sh:/home/builder/host-scripts:ro\" \
-        -v \"${SCRIPT_DIR}/srv:/srv\" \
-        -w /home/builder/bsoe/brightsign-oe/build \
-        bsoe-build"
+    DOCKER_CMD="$DOCKER_CMD -v \"${SCRIPT_DIR}/bsoe-recipes:/home/builder/patches:ro\""
+    DOCKER_CMD="$DOCKER_CMD -v \"${SCRIPT_DIR}/sh:/home/builder/host-scripts:ro\""
 fi
+
+DOCKER_CMD="$DOCKER_CMD bsoe-build"
 
 # Build command construction
 BUILD_CMD="MACHINE=cobra ./bsbb $QUIET_FLAG ${TARGET}"
