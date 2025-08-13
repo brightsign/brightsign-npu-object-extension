@@ -49,6 +49,12 @@ jobs:
       - name: Set Environment variables
         run: |
           echo "BRIGHTSIGN_OS_VERSION=${{ inputs.bs_os_version }}" >> "$GITHUB_ENV"
+          aws s3 ls ${{ env.S3_URL }}/models/install-models.tgz && (echo "COMPILE_MODELS=false" >> "$GITHUB_ENV") || echo "COMPILE_MODELS=true" >> "$GITHUB_ENV"
+          if [[ "${{ github.event.inputs.build-models }}" == "true" ]] || [[ "${{ env.COMPILE_MODELS }}" == "true" ]]; then
+            echo "COMPILE_MODELS_FLAG=" >> "$GITHUB_ENV"
+          else
+            echo "COMPILE_MODELS_FLAG=--without-models" >> "$GITHUB_ENV"
+          fi
 
       - name: Check if Docker image exists
         id: check-image
@@ -62,7 +68,7 @@ jobs:
 
       - name: Run setup command without build
         run: |
-          ./setup -y --without-build --version ${{ inputs.bs_os_version }}
+          ./setup -y --without-build ${{ env.COMPILE_MODELS_FLAG }} --version ${{ inputs.bs_os_version }}
 
       - name: Get Docker image
         if: ${{ env.IMAGE_EXISTS == 'true' }}
@@ -101,18 +107,31 @@ jobs:
       - name: Download models
         if: ${{ inputs.build-models == false }}
         run: |
-          aws s3 ls ${{ env.S3_URL }}/models/install-models.tgz && aws s3 cp ${{ env.S3_URL }}/models/install-models.tgz . &&  tar -xzf install-models.tgz || ./compile-models && tar -czf install-models.tgz install && aws s3 cp install-models.tgz ${{ env.S3_URL }}/models/install-models.tgz
+          aws s3 ls ${{ env.S3_URL }}/models/install-models.tgz && aws s3 cp ${{ env.S3_URL }}/models/install-models.tgz . &&  tar -xzf install-models.tgz || (./compile-models && tar -czf install-models.tgz install && aws s3 cp install-models.tgz ${{ env.S3_URL }}/models/install-models.tgz)
 
       - name: Compile SDK
         if: ${{ inputs.build-sdk == true }}
         run: |
           ./build --extract-sdk
+          echo "COMPILED_SDK=true" >> "$GITHUB_ENV"
           aws s3 cp ./brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh ${{ env.S3_URL }}/sdk/
 
       - name: Get SDK
         if: ${{ inputs.build-sdk == false }}
         run: |
-          aws s3 ls ${{ env.S3_URL }}/sdk/brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh && aws s3 cp ${{ env.S3_URL }}/sdk/brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh . || ./build --extract-sdk && aws s3 cp ./brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh ${{ env.S3_URL }}/sdk/ 
+          echo "COMPILED_SDK=false" >> "$GITHUB_ENV"
+          aws s3 ls ${{ env.S3_URL }}/sdk/brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh && aws s3 cp ${{ env.S3_URL }}/sdk/brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh . || (./build --extract-sdk && echo "COMPILED_SDK=true" >> "$GITHUB_ENV") 
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::207998159418:role/github-actions-npu-repos-role
+          aws-region: us-east-1      
+
+      - name: Upload SDK to S3
+        if: env.COMPILED_SDK != 'false'
+        run: |
+          aws s3 cp ./brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh ${{ env.S3_URL }}/sdk/ 
 
       - name: Build apps
         run: |
