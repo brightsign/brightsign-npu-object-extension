@@ -22,6 +22,7 @@ usage() {
     echo "  --major VERSION        Set major.minor version (e.g., 9.1)"
     echo "  --minor VERSION        Set minor version number (e.g., 52)"
     echo "  --without-build        Don't build the Docker image"
+    echo "  --without-models       Don't prepare toolkit for building models"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "Examples:"
@@ -36,6 +37,7 @@ usage() {
 AUTO_YES=false
 FORCE_DOWNLOAD=false
 WITHOUT_BUILD=false
+WITHOUT_MODELS=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -y|--yes) AUTO_YES=true; shift ;;
@@ -58,6 +60,8 @@ while [[ "$#" -gt 0 ]]; do
             BRIGHTSIGN_OS_MINOR_VERSION="$2"; shift 2 ;;
         --without-build)
             WITHOUT_BUILD=true; shift ;;
+        --without-models)
+            WITHOUT_MODELS=true; shift ;;
         -h|--help)
             usage
             exit 0
@@ -371,7 +375,11 @@ main() {
     
     check_prerequisites
     check_schema_version
-    clone_rknn_toolkit
+    if [[ "$WITHOUT_MODELS" != true ]]; then
+        clone_rknn_toolkit
+    else
+        log "Skipping prepartion of models toolkit as per --without-build option"
+    fi
     if [[ "$WITHOUT_BUILD" != true ]]; then
         setup_docker
     else

@@ -47,6 +47,21 @@ In a typical development workflow, steps 1 - 4 (setup, model compilation, build 
 2. Install: `bash ./ext_npu_yolo_install-lvm.sh && reboot`
 3. Extension auto-starts with USB camera detection
 
+## 🚀 Build using Github Action
+
+__Total Time__: approx. 10 minutes
+
+1. Select __Actions__ -> __Build Extension__
+2. __Run Workflow__
+3. Select __Branch__ which should be used to build it from
+4. Select __Brightsign OS Version__ - default 9.1.52
+5. If models have been updated - check __Build models__ (don't needed in most cases)
+6. If SDK has been changed - check __Build SDK__ (don't needed in most cases - and it'll take about 2-3h to build)
+7. __Run workflow__
+
+When Action has been completed - packages can be found in https://builds-npu.brightsign.io/browse/brightsign-npu-yolox
+
+
 ## 📋 Requirements & Prerequisites
 
 ### Hardware Requirements
@@ -73,6 +88,8 @@ In a typical development workflow, steps 1 - 4 (setup, model compilation, build 
 - **25GB+ disk space** (for OpenEmbedded builds)
 
 __Important__: Apple Silicon Macs are not supported. Use x86_64 Linux or Windows with WSL2.
+
+__SDK and Models__ built for this project can be found in here - https://builds-npu.brightsign.io/browse/brightsign-npu-yolox
 
 ## ⚙️ Configuration & Customization
 
