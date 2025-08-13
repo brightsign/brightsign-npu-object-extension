@@ -36,6 +36,37 @@ cd cv-npu-yolo-object-detect
 
 In a typical development workflow, steps 1 - 4 (setup, model compilation, build and install the sdk) will need to only be done once.  Building the apps and packaging them will likely be repeated as the developer changes the app code.
 
+## 🤖 Automated Build Script
+
+**NEW**: Use the automated build script to run all steps with a single command:
+
+```bash
+# Run all steps automatically (no prompts)
+./scripts/runall.sh --auto
+
+# Run all steps interactively (prompts between steps)
+./scripts/runall.sh
+
+# Skip already completed steps
+./scripts/runall.sh --skip-setup --skip-models
+
+# Run partial workflow (e.g., start from app building)
+./scripts/runall.sh --from-step 5
+
+# Get help with all options
+./scripts/runall.sh --help
+```
+
+**Key Features:**
+- **Progress tracking** with time estimates
+- **Skip options** for already completed steps  
+- **Partial execution** (start/stop at specific steps)
+- **Verbose mode** for detailed output
+- **Auto mode** for CI/CD pipelines
+- **Error handling** with clear failure messages
+
+**Time estimates:** Setup (5-10 min) → Models (3-5 min) → SDK Build (30-45 min) → SDK Install (1 min) → Apps (3-8 min) → Package (1 min)
+
 **✅ Success**: You now have production-ready extension packages:
 
 - `yolo-dev-<timestamp>.zip` (development/testing)

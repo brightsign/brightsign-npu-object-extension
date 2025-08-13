@@ -6,7 +6,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "${SCRIPT_DIR}"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${PROJECT_DIR}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -34,7 +35,7 @@ START_TIME=$(date +%s)
 STEP_START_TIME=0
 
 # Set project root
-PROJECT_ROOT="${SCRIPT_DIR}"
+PROJECT_ROOT="${PROJECT_DIR}"
 export project_root="${PROJECT_ROOT}"
 
 usage() {
