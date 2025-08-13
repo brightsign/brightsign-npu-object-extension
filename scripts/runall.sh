@@ -226,6 +226,14 @@ print_summary() {
 check_prerequisites() {
     log "Checking prerequisites..."
     
+    # Debug terminal environment
+    if [[ "$VERBOSE" == true ]]; then
+        log "Terminal environment debug:"
+        log "  TTY available: $([ -t 0 ] && echo 'yes' || echo 'no')"
+        log "  TERM: ${TERM:-'not set'}"
+        log "  Running from: ${0}"
+    fi
+    
     # Check architecture
     if [ "$(uname -m)" != "x86_64" ] && [ "$SKIP_ARCH_CHECK" != true ]; then
         error "This script requires x86_64 architecture. Current: $(uname -m). Use --skip-arch-check to bypass this check for testing."
@@ -348,10 +356,12 @@ main() {
             step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
             
             if [[ "$VERBOSE" == true ]]; then
+                log "Running compile-models in verbose mode..."
                 ./compile-models || error "Model compilation failed"
             else
+                log "Running compile-models in quiet mode..."
                 if ! ./compile-models --quiet; then
-                    error "Model compilation failed"
+                    error "Model compilation failed. Try running with --verbose for more details."
                 fi
             fi
             
