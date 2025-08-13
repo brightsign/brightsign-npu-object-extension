@@ -135,6 +135,7 @@ jobs:
 
       - name: Install SDK
         run: |
+          chmod +x ./brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh
           ./brightsign-x86_64-cobra-toolchain-${{ env.BRIGHTSIGN_OS_VERSION }}.sh -d ./sdk -y
 
       - name: Build apps
