@@ -358,9 +358,12 @@ generate_manifest() {
     done
     
     if [[ ${#soc_json_items[@]} -gt 0 ]]; then
+        # Build formatted JSON array with proper indentation
         soc_array=$'[\n'
         soc_array+=$(printf '%s,\n' "${soc_json_items[@]}" | sed '$ s/,$//')
         soc_array+=$'\n]'
+        # Validate JSON syntax using jq
+        echo "$soc_array" | jq . > /dev/null || error "Invalid SOC JSON format"
     fi
     
     # Determine player compatibility based on SOCs
@@ -384,9 +387,12 @@ generate_manifest() {
         fi
         
         if [[ ${#player_items[@]} -gt 0 ]]; then
+            # Build formatted JSON array with proper indentation
             players_array=$'[\n'
             players_array+=$(printf '%s,\n' "${player_items[@]}" | sed '$ s/,$//')
             players_array+=$'\n]'
+            # Validate JSON syntax using jq
+            echo "$players_array" | jq . > /dev/null || error "Invalid players JSON format"
         fi
     fi
     

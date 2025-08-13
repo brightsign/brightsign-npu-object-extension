@@ -17,6 +17,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -y, --yes              Skip confirmation prompt"
+    echo "  --force-download       Force re-download of models even if they exist"
     echo "  -v, --version VERSION  Set BrightSign OS version (e.g., 9.1.52)"
     echo "  --major VERSION        Set major.minor version (e.g., 9.1)"
     echo "  --minor VERSION        Set minor version number (e.g., 52)"
@@ -34,11 +35,13 @@ usage() {
 
 # Parse command line arguments
 AUTO_YES=false
+FORCE_DOWNLOAD=false
 WITHOUT_BUILD=false
 WITHOUT_MODELS=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -y|--yes) AUTO_YES=true; shift ;;
+        --force-download) FORCE_DOWNLOAD=true; shift ;;
         -v|--version) 
             if [[ $2 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                 BRIGHTSIGN_OS_MAJOR_VERSION="${2%.*}"
@@ -94,6 +97,27 @@ success() {
     echo -e "${GREEN}✅ $1${NC}"
 }
 
+# Check if a model file exists and is valid
+check_model_file() {
+    local file_path="$1"
+    local min_size_mb="${2:-1}"  # Default minimum size: 1MB
+    
+    if [[ ! -f "$file_path" ]]; then
+        return 1  # File doesn't exist
+    fi
+    
+    # Check file size (in MB)
+    local file_size=$(stat -c%s "$file_path" 2>/dev/null || stat -f%z "$file_path" 2>/dev/null)
+    local min_size_bytes=$((min_size_mb * 1024 * 1024))
+    
+    if [[ -z "$file_size" ]] || [[ "$file_size" -lt "$min_size_bytes" ]]; then
+        warn "Model file $file_path exists but appears incomplete (size: ${file_size:-0} bytes)"
+        return 1  # File is too small
+    fi
+    
+    return 0  # File exists and appears valid
+}
+
 # Check for schema updates
 check_schema_version() {
     log "Checking extension manifest schema version..."
@@ -110,20 +134,32 @@ check_schema_version() {
     # Try to fetch remote schema (with timeout)
     if command -v curl >/dev/null 2>&1; then
         log "Checking for schema updates (5 second timeout)..."
-        if curl -s --connect-timeout 5 --max-time 10 "$schema_url" > /tmp/remote_schema.json 2>/dev/null; then
-            # Compare schemas if both exist
-            if ! diff -q "$local_schema" /tmp/remote_schema.json >/dev/null 2>&1; then
-                warn "Newer schema version available online"
-                warn "Local:  $(jq -r '.$schema // "unknown"' "$local_schema" 2>/dev/null || echo "unknown")"
-                warn "Remote: $(jq -r '.$schema // "unknown"' /tmp/remote_schema.json 2>/dev/null || echo "unknown")"
+        if curl -s --connect-timeout 5 --max-time 10 "$schema_url" > /tmp/remote_schema.json 2>/dev/null && [[ -s /tmp/remote_schema.json ]]; then
+            # Extract schema identifiers (using $id field which is more reliable than $schema)
+            local local_version=$(jq -r '.["$id"] // .version // "unknown"' "$local_schema" 2>/dev/null || echo "unknown")
+            local remote_version=$(jq -r '.["$id"] // .version // "unknown"' /tmp/remote_schema.json 2>/dev/null || echo "unknown")
+            
+            # Only compare if we can determine versions
+            if [[ "$local_version" == "unknown" && "$remote_version" == "unknown" ]]; then
+                log "Schema versions could not be determined, skipping comparison"
+            elif [[ "$local_version" == "unknown" ]]; then
+                warn "Local schema version unknown, remote version: $remote_version"
+            elif [[ "$remote_version" == "unknown" ]]; then
+                log "Remote schema version unknown, using local version: $local_version"
+            elif [[ "$local_version" != "$remote_version" ]]; then
+                warn "Different schema version available online"
+                warn "Local:  $local_version"
+                warn "Remote: $remote_version"
                 warn "Consider updating your local schema before packaging extensions"
                 echo ""
+            elif ! diff -q "$local_schema" /tmp/remote_schema.json >/dev/null 2>&1; then
+                log "Schema version unchanged ($local_version) but content differs - minor updates available"
             else
-                log "Schema is up to date"
+                log "Schema is up to date ($local_version)"
             fi
             rm -f /tmp/remote_schema.json
         else
-            log "Could not check for schema updates (offline or timeout)"
+            log "Could not fetch remote schema (offline, timeout, or empty response)"
         fi
     else
         log "curl not available, skipping schema update check"
@@ -233,31 +269,57 @@ clone_rknn_toolkit() {
     
     # Download YOLO Simplified model
     cd "${SCRIPT_DIR}"
-    log "Downloading YOLOv8 model..."
+    log "Checking YOLOv8 model..."
     mkdir -p toolkit/rknn_model_zoo/examples/yolov8/model/RK3588
     if [[ -d "toolkit/rknn_model_zoo/examples/yolov8/model" ]]; then
         pushd toolkit/rknn_model_zoo/examples/yolov8/model > /dev/null
-        if [[ -f "download_model.sh" ]]; then
-            chmod +x ./download_model.sh
-            ./download_model.sh || warn "Failed to download YOLOv8 model"
+        
+        # Check if model already exists and is valid
+        if check_model_file "yolov8n.onnx" 10 && [[ "$FORCE_DOWNLOAD" != true ]]; then
+            log "YOLOv8 model already exists ($(stat -c%s yolov8n.onnx 2>/dev/null || stat -f%z yolov8n.onnx 2>/dev/null | numfmt --to=iec-i --suffix=B 2>/dev/null || echo 'size unknown')), skipping download"
         else
-            warn "YOLOv8 download_model.sh not found"
+            if [[ "$FORCE_DOWNLOAD" == true ]]; then
+                log "Force downloading YOLOv8 model..."
+            else
+                log "Downloading YOLOv8 model..."
+            fi
+            
+            if [[ -f "download_model.sh" ]]; then
+                chmod +x ./download_model.sh
+                ./download_model.sh || warn "Failed to download YOLOv8 model"
+            else
+                warn "YOLOv8 download_model.sh not found"
+            fi
         fi
+        
         popd > /dev/null
     fi
     
     # Download YOLOX model  
     cd "${SCRIPT_DIR}"
-    log "Downloading YOLOX model..."
+    log "Checking YOLOX model..."
     mkdir -p toolkit/rknn_model_zoo/examples/yolox/model/RK3588
     if [[ -d "toolkit/rknn_model_zoo/examples/yolox/model" ]]; then
         pushd toolkit/rknn_model_zoo/examples/yolox/model > /dev/null
-        if [[ -f "download_model.sh" ]]; then
-            chmod +x ./download_model.sh
-            ./download_model.sh || warn "Failed to download YOLOX model"
+        
+        # Check if model already exists and is valid
+        if check_model_file "yolox_s.onnx" 10 && [[ "$FORCE_DOWNLOAD" != true ]]; then
+            log "YOLOX model already exists ($(stat -c%s yolox_s.onnx 2>/dev/null || stat -f%z yolox_s.onnx 2>/dev/null | numfmt --to=iec-i --suffix=B 2>/dev/null || echo 'size unknown')), skipping download"
         else
-            warn "YOLOX download_model.sh not found"
+            if [[ "$FORCE_DOWNLOAD" == true ]]; then
+                log "Force downloading YOLOX model..."
+            else
+                log "Downloading YOLOX model..."
+            fi
+            
+            if [[ -f "download_model.sh" ]]; then
+                chmod +x ./download_model.sh
+                ./download_model.sh || warn "Failed to download YOLOX model"
+            else
+                warn "YOLOX download_model.sh not found"
+            fi
         fi
+        
         popd > /dev/null
     fi
     
@@ -289,7 +351,7 @@ main() {
     echo "This script will:"
     echo "1. Check prerequisites"
     echo "2. Clone RKNN toolkit and model zoo repositories"
-    echo "3. Download ONNX models (YOLOv8n, YOLOX-s)"
+    echo "3. Download ONNX models (YOLOv8n, YOLOX-s) if not present"
     echo "4. Build rknn_tk2 Docker container for model compilation"
     echo "5. Setup Docker build environment (bsoe-build)"
     echo "6. Download BrightSign OS source (~20GB) inside Docker container"
