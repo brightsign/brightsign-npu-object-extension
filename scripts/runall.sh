@@ -179,6 +179,21 @@ clean_build_artifacts() {
     echo -e "${BOLD}${CYAN}════════════════════════════════════════════════════════════════════${NC}"
     echo ""
     
+    # Pre-cleanup: Handle special cases that need permission fixes
+    log "Preparing directories for removal..."
+    
+    # Handle OpenEmbedded build artifacts that might have restrictive permissions
+    for oe_dir in "brightsign-oe" "bsoe-recipes/build" "bsoe-recipes/downloads" "bsoe-recipes/sstate-cache"; do
+        if [[ -d "$oe_dir" ]]; then
+            if [[ "$VERBOSE" == true ]]; then
+                log "  Fixing permissions in $oe_dir..."
+            fi
+            # Make everything writable so we can remove it
+            find "$oe_dir" -type d -exec chmod 755 {} + 2>/dev/null || true
+            find "$oe_dir" -type f -exec chmod 644 {} + 2>/dev/null || true
+        fi
+    done
+    
     local items_to_clean=(
         "build_firebird/"
         "build_ls5/"
@@ -190,6 +205,7 @@ clean_build_artifacts() {
         "bsoe-recipes/build/"
         "bsoe-recipes/downloads/"
         "bsoe-recipes/sstate-cache/"
+        "brightsign-oe/"
     )
     
     local cleaned_count=0
@@ -217,8 +233,21 @@ clean_build_artifacts() {
     for item in "${items_to_clean[@]}"; do
         if ls $item >/dev/null 2>&1; then
             log "Removing $item..."
-            rm -rf $item
-            cleaned_count=$((cleaned_count + 1))
+            if rm -rf $item 2>/dev/null; then
+                cleaned_count=$((cleaned_count + 1))
+            else
+                # If removal failed, try with permission changes
+                if [[ "$VERBOSE" == true ]]; then
+                    log "  Retrying with permission fix..."
+                fi
+                chmod -R 777 "$item" 2>/dev/null || true
+                if rm -rf $item 2>/dev/null; then
+                    cleaned_count=$((cleaned_count + 1))
+                else
+                    warn "Could not completely remove $item (some files may remain)"
+                    cleaned_count=$((cleaned_count + 1))  # Still count as attempted
+                fi
+            fi
         else
             if [[ "$VERBOSE" == true ]]; then
                 log "Not found: $item (skipping)"
@@ -269,6 +298,26 @@ clean_build_artifacts() {
     echo ""
     success "Clean operation completed successfully"
     log "You can now run a fresh build with './scripts/runall.sh'"
+    
+    # Check if any problematic directories still exist
+    local remaining_dirs=()
+    for dir in "brightsign-oe" "bsoe-recipes/build"; do
+        if [[ -d "$dir" ]]; then
+            remaining_dirs+=("$dir")
+        fi
+    done
+    
+    if [[ ${#remaining_dirs[@]} -gt 0 ]]; then
+        echo ""
+        warn "Some OpenEmbedded build directories may still exist:"
+        for dir in "${remaining_dirs[@]}"; do
+            echo "  - $dir"
+        done
+        echo ""
+        echo "If you encounter 'Directory not empty' errors, you can manually clean with:"
+        echo "  sudo rm -rf ${remaining_dirs[*]}"
+        echo "  (This is sometimes needed due to OpenEmbedded build system permissions)"
+    fi
 }
 
 step_header() {
