@@ -29,6 +29,7 @@ SKIP_SDK_INSTALL=false
 SKIP_APPS=false
 SKIP_PACKAGE=false
 VERBOSE=false
+CLEAN_MODE=false
 
 # Track timing
 START_TIME=$(date +%s)
@@ -54,6 +55,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -auto, --auto          Run all steps without prompting for confirmation"
+    echo "  -c, --clean            Clean all build artifacts and temporary files"
     echo "  --skip-arch-check      Skip x86_64 architecture check (for testing)"
     echo "  --skip-setup           Skip setup step (if already done)"
     echo "  --skip-models          Skip model compilation (if already done)"
@@ -69,6 +71,7 @@ usage() {
     echo "Examples:"
     echo "  $0                     # Run all steps interactively"
     echo "  $0 -auto               # Run all steps automatically"
+    echo "  $0 --clean             # Clean all build artifacts"
     echo "  $0 --skip-setup        # Skip setup if already done"
     echo "  $0 --from-step 5       # Start from building apps"
     echo "  $0 --to-step 4         # Stop after SDK install"
@@ -81,6 +84,7 @@ TO_STEP=6
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -auto|--auto) AUTO_MODE=true; shift ;;
+        -c|--clean) CLEAN_MODE=true; shift ;;
         --skip-arch-check) SKIP_ARCH_CHECK=true; shift ;;
         --skip-setup) SKIP_SETUP=true; shift ;;
         --skip-models) SKIP_MODELS=true; shift ;;
@@ -166,6 +170,105 @@ check_docker_running() {
     if ! docker info >/dev/null 2>&1; then
         error "Docker is not running. Please start Docker and try again."
     fi
+}
+
+# Function to clean build artifacts and temporary files
+clean_build_artifacts() {
+    echo -e "${BOLD}${CYAN}════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${CYAN}  Cleaning Build Artifacts${NC}"
+    echo -e "${BOLD}${CYAN}════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    
+    local items_to_clean=(
+        "build_firebird/"
+        "build_ls5/"
+        "build_xt5/"
+        "sdk/"
+        "install/"
+        "yolo-*.zip"
+        "brightsign-x86_64-cobra-toolchain-*.sh"
+        "bsoe-recipes/build/"
+        "bsoe-recipes/downloads/"
+        "bsoe-recipes/sstate-cache/"
+    )
+    
+    local cleaned_count=0
+    local total_size_mb=0
+    
+    # Calculate approximate total size before cleaning
+    for item in "${items_to_clean[@]}"; do
+        if ls $item >/dev/null 2>&1; then
+            # Use du to get size in MB, fallback to simple count if du fails
+            size_kb=$(du -sk $item 2>/dev/null | cut -f1 | head -n1)
+            if [[ -n "$size_kb" && "$size_kb" =~ ^[0-9]+$ ]]; then
+                size_mb=$((size_kb / 1024))
+                total_size_mb=$((total_size_mb + size_mb))
+            fi
+        fi
+    done
+    
+    if [[ $total_size_mb -gt 0 ]]; then
+        log "Found approximately ${total_size_mb}MB of build artifacts"
+    else
+        log "Scanning for build artifacts..."
+    fi
+    echo ""
+    
+    for item in "${items_to_clean[@]}"; do
+        if ls $item >/dev/null 2>&1; then
+            log "Removing $item..."
+            rm -rf $item
+            cleaned_count=$((cleaned_count + 1))
+        else
+            if [[ "$VERBOSE" == true ]]; then
+                log "Not found: $item (skipping)"
+            fi
+        fi
+    done
+    
+    # Clean any RKNN model files that might have been generated
+    if [[ -f "compile-models" && -x "compile-models" ]]; then
+        log "Cleaning compiled RKNN models..."
+        find . -name "*.rknn" -type f -delete 2>/dev/null || true
+    fi
+    
+    # Clean Docker artifacts related to the project
+    log "Cleaning Docker artifacts..."
+    if command_exists docker; then
+        # Remove dangling images and containers
+        docker container prune -f >/dev/null 2>&1 || true
+        docker image prune -f >/dev/null 2>&1 || true
+        # Remove project-specific images if they exist
+        docker rmi -f $(docker images -q --filter "reference=*yolo*" --filter "reference=*brightsign*") >/dev/null 2>&1 || true
+    fi
+    
+    # Remove any temporary and log files
+    log "Cleaning temporary files..."
+    find . -name "*.tmp" -type f -delete 2>/dev/null || true
+    find . -name "*.log" -type f -delete 2>/dev/null || true
+    find . -name "core.*" -type f -delete 2>/dev/null || true
+    find . -name "*.pyc" -type f -delete 2>/dev/null || true
+    find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+    
+    # Clean CMake build artifacts
+    find . -name "CMakeCache.txt" -type f -delete 2>/dev/null || true
+    find . -name "CMakeFiles" -type d -exec rm -rf {} + 2>/dev/null || true
+    find . -name "cmake_install.cmake" -type f -delete 2>/dev/null || true
+    find . -name "Makefile" -type f -not -path "./bsoe-recipes/*" -delete 2>/dev/null || true
+    
+    echo ""
+    if [[ $cleaned_count -gt 0 ]]; then
+        success "Cleaned $cleaned_count build artifact directories"
+        if [[ $total_size_mb -gt 0 ]]; then
+            success "Freed approximately ${total_size_mb}MB of disk space"
+        fi
+    else
+        log "No major build artifacts found to clean"
+    fi
+    
+    echo ""
+    success "Clean operation completed successfully"
+    log "You can now run a fresh build with './scripts/runall.sh'"
 }
 
 step_header() {
@@ -294,6 +397,12 @@ main() {
     echo -e "${BOLD}${MAGENTA}║     BrightSign YOLO Object Detection - Complete Build Pipeline    ║${NC}"
     echo -e "${BOLD}${MAGENTA}╚══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
+    
+    # Handle clean mode
+    if [ "$CLEAN_MODE" = true ]; then
+        clean_build_artifacts
+        exit 0
+    fi
     
     if [ "$AUTO_MODE" = true ]; then
         log "Running in automatic mode - no prompts"
