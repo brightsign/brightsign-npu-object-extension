@@ -183,7 +183,7 @@ clean_build_artifacts() {
     log "Preparing directories for removal..."
     
     # Handle OpenEmbedded build artifacts that might have restrictive permissions
-    for oe_dir in "brightsign-oe" "bsoe-recipes/build" "bsoe-recipes/downloads" "bsoe-recipes/sstate-cache"; do
+    for oe_dir in "brightsign-oe"; do
         if [[ -d "$oe_dir" ]]; then
             if [[ "$VERBOSE" == true ]]; then
                 log "  Fixing permissions in $oe_dir..."
