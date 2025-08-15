@@ -212,11 +212,11 @@ add_custom_command(TARGET yolo_demo POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy ${RGA_LIB} $<TARGET_FILE_DIR:yolo_demo>
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/install/${SOC_DIR}/model $<TARGET_FILE_DIR:yolo_demo>/model
   # Copy the Go binary from the build directory
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/image-stream-server $<TARGET_FILE_DIR:attention_demo>/image-stream-server
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/image-stream-server $<TARGET_FILE_DIR:yolo_demo>/image-stream-server
 )
 
-# Make sure image_stream_server builds before attention_demo
-add_dependencies(attention_demo image_stream_server)
+# Make sure image_stream_server builds before yolo_demo
+add_dependencies(yolo_demo image_stream_server)
 
 # install target and libraries
 set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install/${SOC_DIR})
