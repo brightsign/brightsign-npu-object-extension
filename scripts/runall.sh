@@ -30,6 +30,9 @@ SKIP_APPS=false
 SKIP_PACKAGE=false
 VERBOSE=false
 CLEAN_MODE=false
+FORCE_MODELS=false
+FORCE_SDK_BUILD=false
+FORCE_SDK_INSTALL=false
 
 # Track timing
 START_TIME=$(date +%s)
@@ -66,6 +69,9 @@ usage() {
     echo "  --from-step N          Start from step N (1-6)"
     echo "  --to-step N            Stop after step N (1-6)"
     echo "  --verbose              Show detailed output"
+    echo "  --force-models         Force model compilation even if already built"
+    echo "  --force-sdk-build      Force SDK build even if installer exists"
+    echo "  --force-sdk-install    Force SDK installation even if already installed"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "Examples:"
@@ -75,6 +81,8 @@ usage() {
     echo "  $0 --skip-setup        # Skip setup if already done"
     echo "  $0 --from-step 5       # Start from building apps"
     echo "  $0 --to-step 4         # Stop after SDK install"
+    echo "  $0 --force-models      # Force rebuild models even if they exist"
+    echo "  $0 --force-sdk-build   # Force rebuild SDK even if installer exists"
 }
 
 # Parse command line arguments
@@ -92,6 +100,9 @@ while [[ "$#" -gt 0 ]]; do
         --skip-sdk-install) SKIP_SDK_INSTALL=true; shift ;;
         --skip-apps) SKIP_APPS=true; shift ;;
         --skip-package) SKIP_PACKAGE=true; shift ;;
+        --force-models) FORCE_MODELS=true; shift ;;
+        --force-sdk-build) FORCE_SDK_BUILD=true; shift ;;
+        --force-sdk-install) FORCE_SDK_INSTALL=true; shift ;;
         --from-step) FROM_STEP="$2"; shift 2 ;;
         --to-step) TO_STEP="$2"; shift 2 ;;
         --verbose) VERBOSE=true; shift ;;
@@ -511,19 +522,31 @@ main() {
         if [[ "$SKIP_MODELS" == true ]]; then
             log "Skipping model compilation (--skip-models flag)"
         else
-            step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
-            
-            if [[ "$VERBOSE" == true ]]; then
-                log "Running compile-models in verbose mode..."
-                ./compile-models || error "Model compilation failed"
+            # Check if models are already compiled (unless forced)
+            if [[ "$FORCE_MODELS" == true ]]; then
+                log "Force rebuilding models (--force-models flag)"
+                step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
+            elif [[ -f "install/RK3568/model/yolov8n.rknn" && -f "install/RK3576/model/yolov8n.rknn" && -f "install/RK3588/model/yolov8n.rknn" ]]; then
+                log "RKNN models already compiled for all platforms"
+                log "Skipping model compilation (already completed)"
             else
-                log "Running compile-models in quiet mode..."
-                if ! ./compile-models --quiet; then
-                    error "Model compilation failed. Try running with --verbose for more details."
-                fi
+                step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
             fi
             
-            step_footer "Model compilation"
+            # Compile models if we need to (either not built or forced)
+            if [[ "$FORCE_MODELS" == true ]] || [[ ! -f "install/RK3568/model/yolov8n.rknn" || ! -f "install/RK3576/model/yolov8n.rknn" || ! -f "install/RK3588/model/yolov8n.rknn" ]]; then
+                if [[ "$VERBOSE" == true ]]; then
+                    log "Running compile-models in verbose mode..."
+                    ./compile-models || error "Model compilation failed"
+                else
+                    log "Running compile-models in quiet mode..."
+                    if ! ./compile-models --quiet; then
+                        error "Model compilation failed. Try running with --verbose for more details."
+                    fi
+                fi
+                
+                step_footer "Model compilation"
+            fi
         fi
     fi
     
@@ -533,20 +556,33 @@ main() {
         if [[ "$SKIP_SDK_BUILD" == true ]]; then
             log "Skipping SDK build (--skip-sdk-build flag)"
         else
-            step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
-            
-            log "This is the longest step. Building BrightSign OS SDK..."
-            log "The build will download ~20GB and compile the SDK"
-            
-            if [[ "$VERBOSE" == true ]]; then
-                ./build --extract-sdk || error "SDK build failed"
+            # Check if SDK installer already exists (unless forced)
+            SDK_INSTALLER_CHECK=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
+            if [[ "$FORCE_SDK_BUILD" == true ]]; then
+                log "Force rebuilding SDK (--force-sdk-build flag)"
+                step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
+            elif [[ -n "$SDK_INSTALLER_CHECK" ]]; then
+                log "SDK installer already exists: $SDK_INSTALLER_CHECK"
+                log "Skipping SDK build (already completed)"
             else
-                if ! ./build --extract-sdk > /dev/null 2>&1; then
-                    error "SDK build failed"
-                fi
+                step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
             fi
             
-            step_footer "SDK build"
+            # Build SDK if we need to (either not built or forced)
+            if [[ "$FORCE_SDK_BUILD" == true ]] || [[ -z "$SDK_INSTALLER_CHECK" ]]; then
+                log "This is the longest step. Building BrightSign OS SDK..."
+                log "The build will download ~20GB and compile the SDK"
+                
+                if [[ "$VERBOSE" == true ]]; then
+                    ./build --extract-sdk || error "SDK build failed"
+                else
+                    if ! ./build --extract-sdk > /dev/null 2>&1; then
+                        error "SDK build failed"
+                    fi
+                fi
+                
+                step_footer "SDK build"
+            fi
         fi
     fi
     
@@ -556,19 +592,31 @@ main() {
         if [[ "$SKIP_SDK_INSTALL" == true ]]; then
             log "Skipping SDK installation (--skip-sdk-install flag)"
         else
-            step_header "4/6" "Install SDK" "1 minute"
-            
-            # Find the SDK installer
-            SDK_INSTALLER=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
-            
-            if [[ -z "$SDK_INSTALLER" ]]; then
-                error "SDK installer not found. Please run build step first."
+            # Check if SDK is already installed (unless forced)
+            if [[ "$FORCE_SDK_INSTALL" == true ]]; then
+                log "Force reinstalling SDK (--force-sdk-install flag)"
+                step_header "4/6" "Install SDK" "1 minute"
+            elif [[ -d "./sdk" && -f "./sdk/environment-setup-aarch64-oe-linux" ]]; then
+                log "SDK already installed in ./sdk/"
+                log "Skipping SDK installation (already completed)"
+            else
+                step_header "4/6" "Install SDK" "1 minute"
             fi
             
-            log "Installing SDK from $SDK_INSTALLER..."
-            ./"$SDK_INSTALLER" -d ./sdk -y || error "SDK installation failed"
-            
-            step_footer "SDK installation"
+            # Install SDK if we need to (either not installed or forced)
+            if [[ "$FORCE_SDK_INSTALL" == true ]] || [[ ! -d "./sdk" || ! -f "./sdk/environment-setup-aarch64-oe-linux" ]]; then
+                # Find the SDK installer
+                SDK_INSTALLER=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
+                
+                if [[ -z "$SDK_INSTALLER" ]]; then
+                    error "SDK installer not found. Please run build step first."
+                fi
+                
+                log "Installing SDK from $SDK_INSTALLER..."
+                ./"$SDK_INSTALLER" -d ./sdk -y || error "SDK installation failed"
+                
+                step_footer "SDK installation"
+            fi
         fi
     fi
     
