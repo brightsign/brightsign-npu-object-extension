@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# BrightSign YOLO Object Detection - Complete Build Script
+# BrightSign Object Detection - Complete Build Script
 # Runs all steps from Quick Start guide in sequence
 
 set -e
@@ -29,10 +29,6 @@ SKIP_SDK_INSTALL=false
 SKIP_APPS=false
 SKIP_PACKAGE=false
 VERBOSE=false
-CLEAN_MODE=false
-FORCE_MODELS=false
-FORCE_SDK_BUILD=false
-FORCE_SDK_INSTALL=false
 
 # Track timing
 START_TIME=$(date +%s)
@@ -44,7 +40,7 @@ export project_root="${PROJECT_ROOT}"
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
-    echo "Run complete BrightSign YOLO Object Detection build pipeline"
+    echo "Run complete BrightSign Object Detection build pipeline"
     echo ""
     echo "This script automates all Quick Start steps:"
     echo "  1. Setup environment (5-10 minutes)"
@@ -58,7 +54,6 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -auto, --auto          Run all steps without prompting for confirmation"
-    echo "  -c, --clean            Clean all build artifacts and temporary files"
     echo "  --skip-arch-check      Skip x86_64 architecture check (for testing)"
     echo "  --skip-setup           Skip setup step (if already done)"
     echo "  --skip-models          Skip model compilation (if already done)"
@@ -69,20 +64,14 @@ usage() {
     echo "  --from-step N          Start from step N (1-6)"
     echo "  --to-step N            Stop after step N (1-6)"
     echo "  --verbose              Show detailed output"
-    echo "  --force-models         Force model compilation even if already built"
-    echo "  --force-sdk-build      Force SDK build even if installer exists"
-    echo "  --force-sdk-install    Force SDK installation even if already installed"
     echo "  -h, --help             Show this help message"
     echo ""
     echo "Examples:"
     echo "  $0                     # Run all steps interactively"
     echo "  $0 -auto               # Run all steps automatically"
-    echo "  $0 --clean             # Clean all build artifacts"
     echo "  $0 --skip-setup        # Skip setup if already done"
     echo "  $0 --from-step 5       # Start from building apps"
     echo "  $0 --to-step 4         # Stop after SDK install"
-    echo "  $0 --force-models      # Force rebuild models even if they exist"
-    echo "  $0 --force-sdk-build   # Force rebuild SDK even if installer exists"
 }
 
 # Parse command line arguments
@@ -92,7 +81,6 @@ TO_STEP=6
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -auto|--auto) AUTO_MODE=true; shift ;;
-        -c|--clean) CLEAN_MODE=true; shift ;;
         --skip-arch-check) SKIP_ARCH_CHECK=true; shift ;;
         --skip-setup) SKIP_SETUP=true; shift ;;
         --skip-models) SKIP_MODELS=true; shift ;;
@@ -100,9 +88,6 @@ while [[ "$#" -gt 0 ]]; do
         --skip-sdk-install) SKIP_SDK_INSTALL=true; shift ;;
         --skip-apps) SKIP_APPS=true; shift ;;
         --skip-package) SKIP_PACKAGE=true; shift ;;
-        --force-models) FORCE_MODELS=true; shift ;;
-        --force-sdk-build) FORCE_SDK_BUILD=true; shift ;;
-        --force-sdk-install) FORCE_SDK_INSTALL=true; shift ;;
         --from-step) FROM_STEP="$2"; shift 2 ;;
         --to-step) TO_STEP="$2"; shift 2 ;;
         --verbose) VERBOSE=true; shift ;;
@@ -183,154 +168,6 @@ check_docker_running() {
     fi
 }
 
-# Function to clean build artifacts and temporary files
-clean_build_artifacts() {
-    echo -e "${BOLD}${CYAN}════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${BOLD}${CYAN}  Cleaning Build Artifacts${NC}"
-    echo -e "${BOLD}${CYAN}════════════════════════════════════════════════════════════════════${NC}"
-    echo ""
-    
-    # Pre-cleanup: Handle special cases that need permission fixes
-    log "Preparing directories for removal..."
-    
-    # Handle OpenEmbedded build artifacts that might have restrictive permissions
-    for oe_dir in "brightsign-oe"; do
-        if [[ -d "$oe_dir" ]]; then
-            if [[ "$VERBOSE" == true ]]; then
-                log "  Fixing permissions in $oe_dir..."
-            fi
-            # Make everything writable so we can remove it
-            find "$oe_dir" -type d -exec chmod 755 {} + 2>/dev/null || true
-            find "$oe_dir" -type f -exec chmod 644 {} + 2>/dev/null || true
-        fi
-    done
-    
-    local items_to_clean=(
-        "build_firebird/"
-        "build_ls5/"
-        "build_xt5/"
-        "sdk/"
-        "install/"
-        "yolo-*.zip"
-        "brightsign-x86_64-cobra-toolchain-*.sh"
-        "bsoe-recipes/build/"
-        "bsoe-recipes/downloads/"
-        "bsoe-recipes/sstate-cache/"
-        "brightsign-oe/"
-    )
-    
-    local cleaned_count=0
-    local total_size_mb=0
-    
-    # Calculate approximate total size before cleaning
-    for item in "${items_to_clean[@]}"; do
-        if ls $item >/dev/null 2>&1; then
-            # Use du to get size in MB, fallback to simple count if du fails
-            size_kb=$(du -sk $item 2>/dev/null | cut -f1 | head -n1)
-            if [[ -n "$size_kb" && "$size_kb" =~ ^[0-9]+$ ]]; then
-                size_mb=$((size_kb / 1024))
-                total_size_mb=$((total_size_mb + size_mb))
-            fi
-        fi
-    done
-    
-    if [[ $total_size_mb -gt 0 ]]; then
-        log "Found approximately ${total_size_mb}MB of build artifacts"
-    else
-        log "Scanning for build artifacts..."
-    fi
-    echo ""
-    
-    for item in "${items_to_clean[@]}"; do
-        if ls $item >/dev/null 2>&1; then
-            log "Removing $item..."
-            if rm -rf $item 2>/dev/null; then
-                cleaned_count=$((cleaned_count + 1))
-            else
-                # If removal failed, try with permission changes
-                if [[ "$VERBOSE" == true ]]; then
-                    log "  Retrying with permission fix..."
-                fi
-                chmod -R 777 "$item" 2>/dev/null || true
-                if rm -rf $item 2>/dev/null; then
-                    cleaned_count=$((cleaned_count + 1))
-                else
-                    warn "Could not completely remove $item (some files may remain)"
-                    cleaned_count=$((cleaned_count + 1))  # Still count as attempted
-                fi
-            fi
-        else
-            if [[ "$VERBOSE" == true ]]; then
-                log "Not found: $item (skipping)"
-            fi
-        fi
-    done
-    
-    # Clean any RKNN model files that might have been generated
-    if [[ -f "compile-models" && -x "compile-models" ]]; then
-        log "Cleaning compiled RKNN models..."
-        find . -name "*.rknn" -type f -delete 2>/dev/null || true
-    fi
-    
-    # Clean Docker artifacts related to the project
-    log "Cleaning Docker artifacts..."
-    if command_exists docker; then
-        # Remove dangling images and containers
-        docker container prune -f >/dev/null 2>&1 || true
-        docker image prune -f >/dev/null 2>&1 || true
-        # Remove project-specific images if they exist
-        docker rmi -f $(docker images -q --filter "reference=*yolo*" --filter "reference=*brightsign*") >/dev/null 2>&1 || true
-    fi
-    
-    # Remove any temporary and log files
-    log "Cleaning temporary files..."
-    find . -name "*.tmp" -type f -delete 2>/dev/null || true
-    find . -name "*.log" -type f -delete 2>/dev/null || true
-    find . -name "core.*" -type f -delete 2>/dev/null || true
-    find . -name "*.pyc" -type f -delete 2>/dev/null || true
-    find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-    
-    # Clean CMake build artifacts
-    find . -name "CMakeCache.txt" -type f -delete 2>/dev/null || true
-    find . -name "CMakeFiles" -type d -exec rm -rf {} + 2>/dev/null || true
-    find . -name "cmake_install.cmake" -type f -delete 2>/dev/null || true
-    find . -name "Makefile" -type f -not -path "./bsoe-recipes/*" -delete 2>/dev/null || true
-    
-    echo ""
-    if [[ $cleaned_count -gt 0 ]]; then
-        success "Cleaned $cleaned_count build artifact directories"
-        if [[ $total_size_mb -gt 0 ]]; then
-            success "Freed approximately ${total_size_mb}MB of disk space"
-        fi
-    else
-        log "No major build artifacts found to clean"
-    fi
-    
-    echo ""
-    success "Clean operation completed successfully"
-    log "You can now run a fresh build with './scripts/runall.sh'"
-    
-    # Check if any problematic directories still exist
-    local remaining_dirs=()
-    for dir in "brightsign-oe" "bsoe-recipes/build"; do
-        if [[ -d "$dir" ]]; then
-            remaining_dirs+=("$dir")
-        fi
-    done
-    
-    if [[ ${#remaining_dirs[@]} -gt 0 ]]; then
-        echo ""
-        warn "Some OpenEmbedded build directories may still exist:"
-        for dir in "${remaining_dirs[@]}"; do
-            echo "  - $dir"
-        done
-        echo ""
-        echo "If you encounter 'Directory not empty' errors, you can manually clean with:"
-        echo "  sudo rm -rf ${remaining_dirs[*]}"
-        echo "  (This is sometimes needed due to OpenEmbedded build system permissions)"
-    fi
-}
-
 step_header() {
     local step_num="$1"
     local step_name="$2"
@@ -375,14 +212,14 @@ print_summary() {
     
     echo ""
     echo "Extension packages created:"
-    ls -lh yolo-*.zip 2>/dev/null | while read line; do
+    ls -lh objdet-*.zip 2>/dev/null | while read line; do
         echo "  $line"
     done
     
     echo ""
     echo "Next steps:"
     echo "1. Transfer package to BrightSign player"
-    echo "2. Install: bash ./ext_npu_yolo_install-lvm.sh && reboot"
+    echo "2. Install: bash ./ext_npu_obj_install-lvm.sh && reboot"
     echo "3. Extension will auto-start with USB camera"
 }
 
@@ -454,15 +291,9 @@ check_prerequisites() {
 # Main execution
 main() {
     echo -e "${BOLD}${MAGENTA}╔══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BOLD}${MAGENTA}║     BrightSign YOLO Object Detection - Complete Build Pipeline    ║${NC}"
+    echo -e "${BOLD}${MAGENTA}║     BrightSign Object Detection - Complete Build Pipeline        ║${NC}"
     echo -e "${BOLD}${MAGENTA}╚══════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    
-    # Handle clean mode
-    if [ "$CLEAN_MODE" = true ]; then
-        clean_build_artifacts
-        exit 0
-    fi
     
     if [ "$AUTO_MODE" = true ]; then
         log "Running in automatic mode - no prompts"
@@ -522,31 +353,19 @@ main() {
         if [[ "$SKIP_MODELS" == true ]]; then
             log "Skipping model compilation (--skip-models flag)"
         else
-            # Check if models are already compiled (unless forced)
-            if [[ "$FORCE_MODELS" == true ]]; then
-                log "Force rebuilding models (--force-models flag)"
-                step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
-            elif [[ -f "install/RK3568/model/yolov8n.rknn" && -f "install/RK3576/model/yolov8n.rknn" && -f "install/RK3588/model/yolov8n.rknn" ]]; then
-                log "RKNN models already compiled for all platforms"
-                log "Skipping model compilation (already completed)"
+            step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
+            
+            if [[ "$VERBOSE" == true ]]; then
+                log "Running compile-models in verbose mode..."
+                ./compile-models || error "Model compilation failed"
             else
-                step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
+                log "Running compile-models in quiet mode..."
+                if ! ./compile-models --quiet; then
+                    error "Model compilation failed. Try running with --verbose for more details."
+                fi
             fi
             
-            # Compile models if we need to (either not built or forced)
-            if [[ "$FORCE_MODELS" == true ]] || [[ ! -f "install/RK3568/model/yolov8n.rknn" || ! -f "install/RK3576/model/yolov8n.rknn" || ! -f "install/RK3588/model/yolov8n.rknn" ]]; then
-                if [[ "$VERBOSE" == true ]]; then
-                    log "Running compile-models in verbose mode..."
-                    ./compile-models || error "Model compilation failed"
-                else
-                    log "Running compile-models in quiet mode..."
-                    if ! ./compile-models --quiet; then
-                        error "Model compilation failed. Try running with --verbose for more details."
-                    fi
-                fi
-                
-                step_footer "Model compilation"
-            fi
+            step_footer "Model compilation"
         fi
     fi
     
@@ -556,33 +375,20 @@ main() {
         if [[ "$SKIP_SDK_BUILD" == true ]]; then
             log "Skipping SDK build (--skip-sdk-build flag)"
         else
-            # Check if SDK installer already exists (unless forced)
-            SDK_INSTALLER_CHECK=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
-            if [[ "$FORCE_SDK_BUILD" == true ]]; then
-                log "Force rebuilding SDK (--force-sdk-build flag)"
-                step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
-            elif [[ -n "$SDK_INSTALLER_CHECK" ]]; then
-                log "SDK installer already exists: $SDK_INSTALLER_CHECK"
-                log "Skipping SDK build (already completed)"
+            step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
+            
+            log "This is the longest step. Building BrightSign OS SDK..."
+            log "The build will download ~20GB and compile the SDK"
+            
+            if [[ "$VERBOSE" == true ]]; then
+                ./build --extract-sdk || error "SDK build failed"
             else
-                step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
+                if ! ./build --extract-sdk > /dev/null 2>&1; then
+                    error "SDK build failed"
+                fi
             fi
             
-            # Build SDK if we need to (either not built or forced)
-            if [[ "$FORCE_SDK_BUILD" == true ]] || [[ -z "$SDK_INSTALLER_CHECK" ]]; then
-                log "This is the longest step. Building BrightSign OS SDK..."
-                log "The build will download ~20GB and compile the SDK"
-                
-                if [[ "$VERBOSE" == true ]]; then
-                    ./build --extract-sdk || error "SDK build failed"
-                else
-                    if ! ./build --extract-sdk > /dev/null 2>&1; then
-                        error "SDK build failed"
-                    fi
-                fi
-                
-                step_footer "SDK build"
-            fi
+            step_footer "SDK build"
         fi
     fi
     
@@ -592,31 +398,19 @@ main() {
         if [[ "$SKIP_SDK_INSTALL" == true ]]; then
             log "Skipping SDK installation (--skip-sdk-install flag)"
         else
-            # Check if SDK is already installed (unless forced)
-            if [[ "$FORCE_SDK_INSTALL" == true ]]; then
-                log "Force reinstalling SDK (--force-sdk-install flag)"
-                step_header "4/6" "Install SDK" "1 minute"
-            elif [[ -d "./sdk" && -f "./sdk/environment-setup-aarch64-oe-linux" ]]; then
-                log "SDK already installed in ./sdk/"
-                log "Skipping SDK installation (already completed)"
-            else
-                step_header "4/6" "Install SDK" "1 minute"
+            step_header "4/6" "Install SDK" "1 minute"
+            
+            # Find the SDK installer
+            SDK_INSTALLER=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
+            
+            if [[ -z "$SDK_INSTALLER" ]]; then
+                error "SDK installer not found. Please run build step first."
             fi
             
-            # Install SDK if we need to (either not installed or forced)
-            if [[ "$FORCE_SDK_INSTALL" == true ]] || [[ ! -d "./sdk" || ! -f "./sdk/environment-setup-aarch64-oe-linux" ]]; then
-                # Find the SDK installer
-                SDK_INSTALLER=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
-                
-                if [[ -z "$SDK_INSTALLER" ]]; then
-                    error "SDK installer not found. Please run build step first."
-                fi
-                
-                log "Installing SDK from $SDK_INSTALLER..."
-                ./"$SDK_INSTALLER" -d ./sdk -y || error "SDK installation failed"
-                
-                step_footer "SDK installation"
-            fi
+            log "Installing SDK from $SDK_INSTALLER..."
+            ./"$SDK_INSTALLER" -d ./sdk -y || error "SDK installation failed"
+            
+            step_footer "SDK installation"
         fi
     fi
     

@@ -5,13 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug yolo_demo",
+            "name": "Debug object_detection_demo",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/build/yolo_demo",
+            "program": "${workspaceFolder}/build/object_detection_demo",
             "args": [
                     // "${workspaceFolder}/build/model/yolox_s.rknn",
-                    "${workspaceFolder}/build/model/yolov8n.rknn",
+                    "${workspaceFolder}/build/model/yolox_s.rknn",
                     "/dev/video0",
                     // "${workspaceFolder}/toolkit/rknn_model_zoo/examples/yolov8/model/bus.jpg",
                     "--classes", "can,remote,alien"
@@ -42,7 +42,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "Build yolo_demo",
+            "preLaunchTask": "Build object_detection_demo",
             "miDebuggerPath": "/usr/bin/gdb"
         }
     ]

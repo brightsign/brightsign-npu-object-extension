@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# BrightSign YOLO Object Detection - Package Creation Script
+# BrightSign Object Detection - Package Creation Script
 # Creates both development and extension packages with multi-SOC support
 
 set -e
@@ -46,8 +46,8 @@ success() {
 
 # Configuration
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-DEVELOPMENT_PACKAGE="yolo-dev-${TIMESTAMP}.zip"
-EXTENSION_PACKAGE="yolo-ext-${TIMESTAMP}.zip"
+DEVELOPMENT_PACKAGE="objdet-dev-${TIMESTAMP}.zip"
+EXTENSION_PACKAGE="objdet-ext-${TIMESTAMP}.zip"
 
 # Supported SOCs and their mappings
 declare -A SOC_PLATFORMS=(
@@ -58,7 +58,7 @@ declare -A SOC_PLATFORMS=(
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
-    echo "Package BrightSign YOLO Object Detection extension for deployment"
+    echo "Package BrightSign Object Detection extension for deployment"
     echo ""
     echo "Options:"
     echo "  -d, --dev-only     Create development package only"
@@ -66,7 +66,7 @@ usage() {
     echo "  -c, --clean        Clean install directory before packaging"
     echo "  -v, --verify       Run validation after packaging"
     echo "  --soc SOC          Package specific SOC only (RK3588, RK3576, RK3568)"
-    echo "  --model MODEL      Include specific model only (yolov8, yolox, all)"
+    echo "  --model MODEL      Include specific model only (yolox)"
     echo "  -h, --help         Show this help message"
     echo ""
     echo "Package types:"
@@ -79,9 +79,7 @@ usage() {
     echo "  RK3568  -> LS-5 players (LS445)"
     echo ""
     echo "Model Support:"
-    echo "  yolov8  -> YOLOv8 nano model (YOLO Simplified)"
-    echo "  yolox   -> YOLOX small model"
-    echo "  all     -> Both models (default)"
+    echo "  yolox   -> YOLOX small model (default and only supported model)"
 }
 
 # Parse command line arguments
@@ -90,7 +88,7 @@ EXT_ONLY=false
 CLEAN=false
 VERIFY=false
 SPECIFIC_SOC=""
-SPECIFIC_MODEL="all"
+SPECIFIC_MODEL="yolox"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -119,8 +117,8 @@ while [[ $# -gt 0 ]]; do
             ;;
         --model)
             SPECIFIC_MODEL="$2"
-            if [[ ! "${SPECIFIC_MODEL}" =~ ^(yolov8|yolox|all)$ ]]; then
-                error "Invalid model: $SPECIFIC_MODEL. Must be yolov8, yolox, or all"
+            if [[ ! "${SPECIFIC_MODEL}" =~ ^(yolox)$ ]]; then
+                error "Invalid model: $SPECIFIC_MODEL. Must be yolox"
             fi
             shift 2
             ;;
@@ -148,7 +146,7 @@ check_prerequisites() {
         fi
         
         local build_dir="build_${SOC_PLATFORMS[$soc],,}"
-        if [[ -f "$build_dir/yolo_demo" ]]; then
+        if [[ -f "$build_dir/object_detection_demo" ]]; then
             found_binaries=true
             break
         fi
@@ -166,15 +164,9 @@ check_prerequisites() {
         fi
         
         local install_dir="install/$soc"
-        if [[ -d "$install_dir/model" ]]; then
-            if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolov8" ]] && [[ -f "$install_dir/model/yolov8n.rknn" ]]; then
-                found_models=true
-                break
-            fi
-            if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolox" ]] && [[ -f "$install_dir/model/yolox_s.rknn" ]]; then
-                found_models=true
-                break
-            fi
+        if [[ -d "$install_dir/model" ]] && [[ -f "$install_dir/model/yolox_s.rknn" ]]; then
+            found_models=true
+            break
         fi
     done
 
@@ -241,9 +233,9 @@ copy_binaries() {
         fi
 
         # Copy main binary
-        if [[ -f "$build_dir/yolo_demo" ]]; then
-            cp "$build_dir/yolo_demo" "$package_soc_dir/"
-            chmod +x "$package_soc_dir/yolo_demo"
+        if [[ -f "$build_dir/object_detection_demo" ]]; then
+            cp "$build_dir/object_detection_demo" "$package_soc_dir/"
+            chmod +x "$package_soc_dir/object_detection_demo"
         else
             warn "Binary not found in $build_dir, skipping $soc"
             continue
@@ -252,12 +244,25 @@ copy_binaries() {
         # Copy libraries
         mkdir -p "$package_soc_dir/lib"
         
-        # Copy shared libraries from build directory
-        for lib in "$build_dir"/*.so*; do
-            if [[ -f "$lib" ]]; then
-                cp "$lib" "$package_soc_dir/lib/"
-            fi
-        done
+        # First try to copy from install directory (contains all libraries)
+        local install_lib_dir="install/$soc/lib"
+        if [[ -d "$install_lib_dir" ]]; then
+            log "Copying libraries from install directory for $soc..."
+            # Copy all .so files from install directory  
+            for lib in "$install_lib_dir"/*.so*; do
+                if [[ -f "$lib" ]]; then
+                    cp "$lib" "$package_soc_dir/lib/"
+                fi
+            done
+        else
+            # Fallback: Copy shared libraries from build directory (legacy approach)
+            log "Install directory not found, copying from build directory for $soc..."
+            for lib in "$build_dir"/*.so*; do
+                if [[ -f "$lib" ]]; then
+                    cp "$lib" "$package_soc_dir/lib/"
+                fi
+            done
+        fi
 
         success "$soc binaries copied"
     done
@@ -285,19 +290,10 @@ copy_models() {
 
         mkdir -p "$package_soc_dir/model"
 
-        # Copy models based on selection
-        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolov8" ]]; then
-            if [[ -f "$install_dir/model/yolov8n.rknn" ]]; then
-                cp "$install_dir/model/yolov8n.rknn" "$package_soc_dir/model/"
-                log "Copied YOLOv8 model for $soc"
-            fi
-        fi
-
-        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolox" ]]; then
-            if [[ -f "$install_dir/model/yolox_s.rknn" ]]; then
-                cp "$install_dir/model/yolox_s.rknn" "$package_soc_dir/model/"
-                log "Copied YOLOX model for $soc"
-            fi
+        # Copy YOLOX model
+        if [[ -f "$install_dir/model/yolox_s.rknn" ]]; then
+            cp "$install_dir/model/yolox_s.rknn" "$package_soc_dir/model/"
+            log "Copied YOLOX model for $soc"
         fi
 
         # Always copy labels file
@@ -429,9 +425,9 @@ generate_manifest() {
   "manifestVersion": 1,
   
   "extension": {
-    "id": "com.brightsign.yolo-object-detection",
-    "name": "YOLO Object Detection",
-    "shortName": "YOLO",
+    "id": "com.brightsign.object-detection",
+    "name": "Object Detection",
+    "shortName": "ObjDet",
     "version": "$version",
     "description": "$description",
     "author": $author,
@@ -543,8 +539,8 @@ verify_package() {
         fi
 
         # Check for binary
-        if [[ ! -f "$soc_dir/yolo_demo" ]]; then
-            warn "Missing binary: $soc_dir/yolo_demo"
+        if [[ ! -f "$soc_dir/object_detection_demo" ]]; then
+            warn "Missing binary: $soc_dir/object_detection_demo"
             errors=$((errors + 1))
         else
             total_files=$((total_files + 1))
@@ -552,10 +548,6 @@ verify_package() {
 
         # Check for models
         local models_found=0
-        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolov8" ]] && [[ -f "$soc_dir/model/yolov8n.rknn" ]]; then
-            models_found=$((models_found + 1))
-            total_files=$((total_files + 1))
-        fi
         if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolox" ]] && [[ -f "$soc_dir/model/yolox_s.rknn" ]]; then
             models_found=$((models_found + 1))
             total_files=$((total_files + 1))
@@ -689,19 +681,16 @@ validate_platform_consistency() {
         fi
         
         # Validate binary exists and is executable
-        if [[ ! -f "$soc_dir/yolo_demo" ]]; then
-            warn "Missing binary for $soc: $soc_dir/yolo_demo"
+        if [[ ! -f "$soc_dir/object_detection_demo" ]]; then
+            warn "Missing binary for $soc: $soc_dir/object_detection_demo"
             ((errors++))
-        elif [[ ! -x "$soc_dir/yolo_demo" ]]; then
-            warn "Binary not executable for $soc: $soc_dir/yolo_demo"
+        elif [[ ! -x "$soc_dir/object_detection_demo" ]]; then
+            warn "Binary not executable for $soc: $soc_dir/object_detection_demo"
             ((errors++))
         fi
         
         # Validate model consistency across platforms
         local expected_models=()
-        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolov8" ]]; then
-            expected_models+=("yolov8n.rknn")
-        fi
         if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolox" ]]; then
             expected_models+=("yolox_s.rknn")
         fi
@@ -769,7 +758,7 @@ create_development_package() {
     echo ""
     echo "Development Package Usage:"
     echo "1. Transfer $DEVELOPMENT_PACKAGE to player via DWS"
-    echo "2. On player: mkdir -p /usr/local/yolo && cd /usr/local/yolo"
+    echo "2. On player: mkdir -p /usr/local/objdet && cd /usr/local/objdet"
     echo "3. On player: unzip /storage/sd/$DEVELOPMENT_PACKAGE"
     echo "4. On player: ./bsext_init run"
     echo "Note: Development installation is volatile (lost on reboot)"
@@ -785,10 +774,10 @@ create_extension_package() {
     ../sh/make-extension-lvm || error "Extension creation failed"
 
     # Package the extension
-    zip "../$EXTENSION_PACKAGE" ext_npu_yolo* >/dev/null
+    zip "../$EXTENSION_PACKAGE" ext_npu_obj* >/dev/null
 
     # Clean up temporary files
-    rm -rf ext_npu_yolo*
+    rm -rf ext_npu_obj*
 
     cd ..
 
@@ -800,7 +789,7 @@ create_extension_package() {
     echo "1. Transfer $EXTENSION_PACKAGE to player via DWS"
     echo "2. On player: mkdir -p /usr/local && cd /usr/local"
     echo "3. On player: unzip /storage/sd/$EXTENSION_PACKAGE"
-    echo "4. On player: bash ./ext_npu_yolo_install-lvm.sh"
+    echo "4. On player: bash ./ext_npu_obj_install-lvm.sh"
     echo "5. On player: reboot"
     echo "Note: Extension installation is permanent (persists across reboots)"
 }
@@ -841,7 +830,7 @@ run_validation() {
 
 # Main packaging function
 main() {
-    echo "BrightSign YOLO Object Detection - Package Creation"
+    echo "BrightSign Object Detection - Package Creation"
     echo "=================================================="
     
     # Show configuration

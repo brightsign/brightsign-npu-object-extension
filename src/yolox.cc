@@ -20,7 +20,7 @@
 #include "common.h"
 #include "file_utils.h"
 #include "image_utils.h"
-#include "yolo.h"
+#include "yolox.h"
 #include "postprocess.h"
 
 static void dump_tensor_attr(rknn_tensor_attr *attr)
@@ -32,77 +32,8 @@ static void dump_tensor_attr(rknn_tensor_attr *attr)
            get_qnt_type_string(attr->qnt_type), attr->zp, attr->scale);
 }
 
-yolo_model_type_t detect_yolo_model_type(rknn_app_context_t *app_ctx)
-{
-    if (!app_ctx || !app_ctx->output_attrs) {
-        return YOLO_UNKNOWN;
-    }
 
-    // Model type detection based on output structure:
-    // - Standard YOLO (YOLOX): 3 outputs with 85 channels each [1, 85, H, W]
-    // - Simplified YOLO (YoloV8): 9 outputs with different structure:
-    //   * 3 box regression outputs (64 channels each): [1, 64, H, W]  
-    //   * 3 class prediction outputs (80 channels each): [1, 80, H, W]
-    //   * 3 objectness outputs (1 channel each): [1, 1, H, W]
-    
-    int n_outputs = app_ctx->io_num.n_output;
-    
-    if (n_outputs == 3) {
-        // Standard YOLO (YOLOX) pattern: 3 outputs with 85 channels each
-        // Check if all outputs have 85 channels (4 box + 1 obj + 80 classes)
-        bool all_have_85_channels = true;
-        for (int i = 0; i < 3; i++) {
-            rknn_tensor_attr *output = &app_ctx->output_attrs[i];
-            if (output->n_dims == 4 && output->fmt == RKNN_TENSOR_NCHW) {
-                int channels = output->dims[1];
-                if (channels != 85) {
-                    all_have_85_channels = false;
-                    break;
-                }
-            } else {
-                all_have_85_channels = false;
-                break;
-            }
-        }
-        
-        if (all_have_85_channels) {
-            printf("Model type detection: Standard YOLO format detected (3 outputs, 85 channels each)\n");
-            return YOLO_STANDARD;
-        }
-    }
-    else if (n_outputs == 9) {
-        // Simplified YOLO (YoloV8) pattern: 9 outputs in groups of 3
-        // Expected pattern: 64-channel, 80-channel, 1-channel outputs repeated 3 times
-        bool is_yolov8_pattern = true;
-        int expected_channels[] = {64, 80, 1}; // Pattern repeated 3 times
-        
-        for (int i = 0; i < 9; i++) {
-            rknn_tensor_attr *output = &app_ctx->output_attrs[i];
-            int expected_ch = expected_channels[i % 3];
-            
-            if (output->n_dims == 4 && output->fmt == RKNN_TENSOR_NCHW) {
-                int channels = output->dims[1];
-                if (channels != expected_ch) {
-                    is_yolov8_pattern = false;
-                    break;
-                }
-            } else {
-                is_yolov8_pattern = false;
-                break;
-            }
-        }
-        
-        if (is_yolov8_pattern) {
-            printf("Model type detection: Simplified YOLO format detected (9 outputs, YoloV8 pattern)\n");
-            return YOLO_SIMPLIFIED;
-        }
-    }
-    
-    printf("Model type detection: Unable to determine model type (outputs: %d), defaulting to Standard YOLO\n", n_outputs);
-    return YOLO_STANDARD;  // Default to Standard YOLO for backwards compatibility
-}
-
-int init_yolo_model(const char *model_path, rknn_app_context_t *app_ctx)
+int init_yolox_model(const char *model_path, rknn_app_context_t *app_ctx)
 {
     int ret;
     int model_len = 0;
@@ -194,16 +125,12 @@ int init_yolo_model(const char *model_path, rknn_app_context_t *app_ctx)
     printf("model input height=%d, width=%d, channel=%d\n",
            app_ctx->model_height, app_ctx->model_width, app_ctx->model_channel);
 
-    // Detect YOLO model type based on output tensor characteristics
-    app_ctx->model_type = detect_yolo_model_type(app_ctx);
-    const char* model_type_str = (app_ctx->model_type == YOLO_STANDARD) ? "Standard YOLO" : 
-                                (app_ctx->model_type == YOLO_SIMPLIFIED) ? "Simplified YOLO" : "Unknown";
-    printf("Detected model type: %s\n", model_type_str);
+    printf("Using YOLOX model (standard format)\n");
 
     return 0;
 }
 
-int release_yolo_model(rknn_app_context_t *app_ctx)
+int release_yolox_model(rknn_app_context_t *app_ctx)
 {    
     if (app_ctx->input_attrs != NULL)
     {
@@ -223,7 +150,7 @@ int release_yolo_model(rknn_app_context_t *app_ctx)
     return 0;
 }
 
-int inference_yolo_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold) {
+int inference_yolox_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold) {
     int ret;
     image_buffer_t dst_img;
     letterbox_t letter_box;

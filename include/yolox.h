@@ -1,5 +1,5 @@
-#ifndef _RKNN_DEMO_MOBILENET_H_
-#define _RKNN_DEMO_MOBILENET_H_
+#ifndef _RKNN_DEMO_YOLOX_H_
+#define _RKNN_DEMO_YOLOX_H_
 
 #include "rknn_api.h"
 #include "common.h"
@@ -10,12 +10,7 @@
 #define OBJ_NUMB_MAX_SIZE 128
 #define OBJ_NAME_MAX_SIZE 64
 
-// YOLO model type enumeration
-typedef enum {
-    YOLO_STANDARD,    // Standard YOLO with DFL encoding and separate box/score tensors
-    YOLO_SIMPLIFIED,  // Simplified YOLO with unified tensors and objectness scoring
-    YOLO_UNKNOWN     // Unknown or unsupported model type
-} yolo_model_type_t;
+// YOLOX model - standard YOLO with DFL encoding and separate box/score tensors
 
 typedef struct {
     rknn_context rknn_ctx;
@@ -26,7 +21,7 @@ typedef struct {
     int model_width;
     int model_height;
     bool is_quant;
-    yolo_model_type_t model_type;  // Detected YOLO model type
+    // YOLOX model type - always standard format
 } rknn_app_context_t;
 
 typedef struct box_rect_t {
@@ -48,11 +43,9 @@ typedef struct object_detect_result_list {
     object_detect_result_t results[OBJ_NUMB_MAX_SIZE];
 } object_detect_result_list;
 
-int init_yolo_model(const char *model_path, rknn_app_context_t *app_ctx);
-int release_yolo_model(rknn_app_context_t *app_ctx);
-int inference_yolo_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold = BOX_THRESH);
+int init_yolox_model(const char *model_path, rknn_app_context_t *app_ctx);
+int release_yolox_model(rknn_app_context_t *app_ctx);
+int inference_yolox_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold = BOX_THRESH);
 
-// Model type detection function
-yolo_model_type_t detect_yolo_model_type(rknn_app_context_t *app_ctx);
 
-#endif //_RKNN_DEMO_MOBILENET_H_
+#endif //_RKNN_DEMO_YOLOX_H_

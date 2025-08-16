@@ -125,7 +125,7 @@ Define user-configurable settings accessible via BrightSign registry:
 }
 ```
 
-Registry keys are automatically prefixed with `bsext-<extension-name>-`.
+Registry keys are automatically prefixed with `bsext-obj-` for the object detection extension.
 
 ## Update Policy Configuration (Phase 3)
 
@@ -325,10 +325,10 @@ Examples:
 
 ```bash
 # 1. Test update compatibility first
-./sh/update-extension.sh --dry-run yolo-ext-20250201-123456.zip
+./sh/update-extension.sh --dry-run objdet-ext-20250201-123456.zip
 
 # 2. Perform actual update with full validation
-./sh/update-extension.sh yolo-ext-20250201-123456.zip
+./sh/update-extension.sh objdet-ext-20250201-123456.zip
 
 # 3. Verify update success
 ./bsext_init start
@@ -339,13 +339,13 @@ Examples:
 
 ```bash
 # 1. List available backups
-./sh/rollback-extension.sh --list-backups npu_yolo
+./sh/rollback-extension.sh --list-backups npu_obj
 
 # 2. Test rollback capability
-./sh/rollback-extension.sh --dry-run npu_yolo
+./sh/rollback-extension.sh --dry-run npu_obj
 
 # 3. Perform rollback
-./sh/rollback-extension.sh npu_yolo
+./sh/rollback-extension.sh npu_obj
 
 # 4. Verify rollback success
 ./bsext_init start
@@ -376,10 +376,10 @@ Override policies with `--force` flag when necessary:
 
 ```bash
 # Force update despite policy restrictions
-./sh/update-extension.sh --force yolo-ext-package.zip
+./sh/update-extension.sh --force objdet-ext-package.zip
 
 # Force rollback despite policy restrictions  
-./sh/rollback-extension.sh --force npu_yolo
+./sh/rollback-extension.sh --force npu_obj
 ```
 
 ## Backward Compatibility

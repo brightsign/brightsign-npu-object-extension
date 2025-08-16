@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# BrightSign YOLO Object Detection - Build Script
+# BrightSign Object Detection - Build Script
 # Builds SDK from BrightSign OE sources and compiles C++ application
 
 set -e
@@ -26,7 +26,7 @@ BRIGHTSIGN_OS_VERSION=${BRIGHTSIGN_OS_VERSION:-9.1.52}
 
 usage() {
     echo "Usage: $0 [OPTIONS] [TARGET]"
-    echo "Build BrightSign YOLO Object Detection using BitBake SDK build"
+    echo "Build BrightSign Object Detection using BitBake SDK build"
     echo ""
     echo "Arguments:"
     echo "  TARGET              Package or recipe to build (default: brightsign-sdk)"
@@ -126,7 +126,7 @@ fi
 
 # Verbose output
 if [ "$VERBOSE" = true ]; then
-    echo "BrightSign YOLO Object Detection - Build Script"
+    echo "BrightSign Object Detection - Build Script"
     echo "==============================================="
     echo "Script directory: $SCRIPT_DIR"
     echo "Target: $TARGET"

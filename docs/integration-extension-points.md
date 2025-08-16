@@ -9,7 +9,7 @@
 
 ## Overview
 
-The BrightSign YOLO Object Detection application is architected with well-defined extension points that enable developers to customize behavior, add new functionality, and integrate with external systems. The design follows the Open/Closed Principle, allowing extensions without modifying existing code.
+The BrightSign Object Detection application is architected with well-defined extension points that enable developers to customize behavior, add new functionality, and integrate with external systems. The design follows the Open/Closed Principle, allowing extensions without modifying existing code.
 
 ### Key Extension Categories
 
@@ -96,7 +96,7 @@ private:
     
 public:
     MQTTTransport(const std::string& broker, const std::string& topic, 
-                  const std::string& client_id = "yolo_detector");
+                  const std::string& client_id = "obj_detector");
     ~MQTTTransport();
     
     // Transport interface implementation
@@ -220,7 +220,7 @@ void MQTTTransport::messageDelivered(void* context, MQTTClient_deliveryToken tok
 // Create MQTT transport for IoT integration
 auto mqtt_transport = std::make_shared<MQTTTransport>(
     "tcp://mqtt.broker.com:1883",
-    "sensors/yolo/detections",
+    "sensors/objdet/detections",
     "brightsign_player_001"
 );
 
@@ -333,7 +333,7 @@ private:
     std::map<std::string, std::string> labels;
     
 public:
-    explicit PrometheusFormatter(const std::string& job = "yolo_detection") 
+    explicit PrometheusFormatter(const std::string& job = "object_detection") 
         : job_name(job) {}
     
     void setLabel(const std::string& key, const std::string& value) {
@@ -358,7 +358,7 @@ public:
         
         // Generate Prometheus metrics in exposition format
         for (const auto& [class_name, count] : class_counts) {
-            ss << "yolo_detections_total{";
+            ss << "objdet_detections_total{";
             ss << "job=\"" << job_name << "\"";
             ss << ",class=\"" << class_name << "\"";
             
@@ -373,7 +373,7 @@ public:
         }
         
         // Add summary metrics
-        ss << "yolo_inference_total{job=\"" << job_name << "\"} 1 "
+        ss << "objdet_inference_total{job=\"" << job_name << "\"} 1 "
            << std::chrono::duration_cast<std::chrono::milliseconds>(
                result.timestamp.time_since_epoch()).count() << "\n";
         
@@ -389,13 +389,13 @@ public:
 #include "formatters/prometheus_formatter.h"
 
 // Create Prometheus formatter with custom labels
-auto prometheus_formatter = std::make_shared<PrometheusFormatter>("yolo_object_detection");
+auto prometheus_formatter = std::make_shared<PrometheusFormatter>("object_detection");
 prometheus_formatter->setLabel("instance", "brightsign_player_001");
 prometheus_formatter->setLabel("location", "retail_store_front");
 prometheus_formatter->setLabel("model", "yolox_s");
 
 // Create HTTP transport for Prometheus push gateway
-auto http_transport = std::make_shared<HTTPTransport>("http://pushgateway:9091/metrics/job/yolo");
+auto http_transport = std::make_shared<HTTPTransport>("http://pushgateway:9091/metrics/job/objdet");
 
 // Create publisher for metrics
 Publisher metrics_publisher(
@@ -413,9 +413,9 @@ std::thread metrics_thread(std::ref(metrics_publisher));
 #### Sample Prometheus Output
 
 ```ini
-yolo_detections_total{job="yolo_object_detection",class="person",instance="brightsign_player_001",location="retail_store_front",model="yolox_s"} 3 1674123456789
-yolo_detections_total{job="yolo_object_detection",class="car",instance="brightsign_player_001",location="retail_store_front",model="yolox_s"} 1 1674123456789
-yolo_inference_total{job="yolo_object_detection"} 1 1674123456789
+objdet_detections_total{job="object_detection",class="person",instance="brightsign_player_001",location="retail_store_front",model="yolox_s"} 3 1674123456789
+objdet_detections_total{job="object_detection",class="car",instance="brightsign_player_001",location="retail_store_front",model="yolox_s"} 1 1674123456789
+objdet_inference_total{job="object_detection"} 1 1674123456789
 ```
 
 This format is compatible with Prometheus monitoring systems and can be used for:
@@ -704,4 +704,4 @@ int main(int argc, char** argv) {
 }
 ```
 
-This performance testing framework enables comprehensive validation of system performance characteristics, helping ensure the YOLO detection system meets real-time requirements across different deployment scenarios.
+This performance testing framework enables comprehensive validation of system performance characteristics, helping ensure the object detection system meets real-time requirements across different deployment scenarios.

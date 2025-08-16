@@ -48,9 +48,9 @@ usage() {
     echo "  -h, --help        Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0 yolo-ext-20250201-123456.zip"
-    echo "  $0 --force --no-backup yolo-ext-20250201-123456.zip"
-    echo "  $0 --dry-run yolo-ext-20250201-123456.zip"
+    echo "  $0 objdet-ext-20250201-123456.zip"
+    echo "  $0 --force --no-backup objdet-ext-20250201-123456.zip"
+    echo "  $0 --dry-run objdet-ext-20250201-123456.zip"
 }
 
 # Parse command line arguments
@@ -303,7 +303,7 @@ backup_configuration() {
     fi
     
     # Backup user data directories if they exist
-    local data_dirs=("/tmp/yolo_output" "/var/log/bsext-yolo")
+    local data_dirs=("/tmp/objdet_output" "/var/log/bsext-obj")
     for data_dir in "${data_dirs[@]}"; do
         if [[ -d "$data_dir" ]]; then
             local backup_name=$(basename "$data_dir")
@@ -320,17 +320,17 @@ stop_extension() {
     log "Stopping current extension..."
     
     # Try to stop via bsext_init if it exists
-    if [[ -f "/usr/local/yolo/bsext_init" ]]; then
-        /usr/local/yolo/bsext_init stop 2>/dev/null || true
+    if [[ -f "/usr/local/obj/bsext_init" ]]; then
+        /usr/local/obj/bsext_init stop 2>/dev/null || true
     fi
     
     # Also try system service approach
     if command -v systemctl >/dev/null 2>&1; then
-        systemctl stop bsext-yolo 2>/dev/null || true
+        systemctl stop bsext-obj 2>/dev/null || true
     fi
     
     # Kill any remaining processes
-    pkill -f "yolo_demo" 2>/dev/null || true
+    pkill -f "object_detection_demo" 2>/dev/null || true
     
     success "Extension stopped"
 }
@@ -398,7 +398,7 @@ restore_configuration() {
     fi
     
     # Restore user data directories
-    local data_dirs=("yolo_output" "bsext-yolo")
+    local data_dirs=("objdet_output" "bsext-obj")
     for data_dir in "${data_dirs[@]}"; do
         local backup_path="$backup_dir/$data_dir"
         local restore_path="/tmp/$data_dir"
@@ -422,11 +422,11 @@ start_extension() {
     log "Starting updated extension..."
     
     # Try to start via bsext_init if it exists
-    if [[ -f "/usr/local/yolo/bsext_init" ]]; then
+    if [[ -f "/usr/local/obj/bsext_init" ]]; then
         if [[ "$DRY_RUN" == "true" ]]; then
             log "DRY RUN: Would start extension via bsext_init"
         else
-            /usr/local/yolo/bsext_init start
+            /usr/local/obj/bsext_init start
             success "Extension started successfully"
         fi
     else

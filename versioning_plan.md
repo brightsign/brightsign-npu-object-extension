@@ -102,18 +102,18 @@ Snap's confinement and base system influenced our thinking:
   "manifestVersion": 1,
   
   "extension": {
-    "id": "com.brightsign.yolo-object-detection",
-    "name": "YOLO Object Detection",
-    "shortName": "YOLO",
+    "id": "com.brightsign.object-detection",
+    "name": "Object Detection",
+    "shortName": "ObjDet",
     "version": "1.2.0",
-    "description": "NPU-accelerated object detection using YOLO models",
+    "description": "NPU-accelerated object detection using YOLOX models",
     "author": {
       "name": "BrightSign LLC",
       "email": "support@brightsign.biz",
       "url": "https://www.brightsign.biz"
     },
     "license": "Apache-2.0",
-    "homepage": "https://github.com/brightsign/yolo-extension",
+    "homepage": "https://github.com/brightsign/object-detection-extension",
     "category": "ai-vision"
   },
   
@@ -531,7 +531,7 @@ generate_manifest() {
 {
   "manifestVersion": 1,
   "extension": {
-    "id": "com.brightsign.yolo-object-detection",
+    "id": "com.brightsign.object-detection",
     "version": "${version}",
     ...
   }
@@ -852,7 +852,7 @@ rollback_extension() {
     "dependencies": {
       "extensions": [
         {
-          "id": "com.brightsign.yolo-object-detection",
+          "id": "com.brightsign.object-detection",
           "version": "^1.2.0"
         }
       ]

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# BrightSign YOLO Object Detection - Setup Script
+# BrightSign Object Detection - Setup Script
 # Creates bsoe-build Docker environment with BrightSign OS sources
 
 set -e
@@ -13,7 +13,7 @@ BRIGHTSIGN_OS_MINOR_VERSION=${BRIGHTSIGN_OS_MINOR_VERSION:-52}
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
-    echo "Setup complete BrightSign YOLO Object Detection build environment with RKNN toolkit, models, and containers"
+    echo "Setup complete BrightSign Object Detection build environment with RKNN toolkit, models, and containers"
     echo ""
     echo "Options:"
     echo "  -y, --yes              Skip confirmation prompt"
@@ -267,34 +267,6 @@ clone_rknn_toolkit() {
     # Download ONNX models
     log "Downloading ONNX models..."
     
-    # Download YOLO Simplified model
-    cd "${SCRIPT_DIR}"
-    log "Checking YOLOv8 model..."
-    mkdir -p toolkit/rknn_model_zoo/examples/yolov8/model/RK3588
-    if [[ -d "toolkit/rknn_model_zoo/examples/yolov8/model" ]]; then
-        pushd toolkit/rknn_model_zoo/examples/yolov8/model > /dev/null
-        
-        # Check if model already exists and is valid
-        if check_model_file "yolov8n.onnx" 10 && [[ "$FORCE_DOWNLOAD" != true ]]; then
-            log "YOLOv8 model already exists ($(stat -c%s yolov8n.onnx 2>/dev/null || stat -f%z yolov8n.onnx 2>/dev/null | numfmt --to=iec-i --suffix=B 2>/dev/null || echo 'size unknown')), skipping download"
-        else
-            if [[ "$FORCE_DOWNLOAD" == true ]]; then
-                log "Force downloading YOLOv8 model..."
-            else
-                log "Downloading YOLOv8 model..."
-            fi
-            
-            if [[ -f "download_model.sh" ]]; then
-                chmod +x ./download_model.sh
-                ./download_model.sh || warn "Failed to download YOLOv8 model"
-            else
-                warn "YOLOv8 download_model.sh not found"
-            fi
-        fi
-        
-        popd > /dev/null
-    fi
-    
     # Download YOLOX model  
     cd "${SCRIPT_DIR}"
     log "Checking YOLOX model..."
@@ -346,12 +318,12 @@ clone_rknn_toolkit() {
 
 # Main setup function
 main() {
-    echo "BrightSign YOLO Object Detection - Setup Script"
+    echo "BrightSign Object Detection - Setup Script"
     echo "==============================================="
     echo "This script will:"
     echo "1. Check prerequisites"
     echo "2. Clone RKNN toolkit and model zoo repositories"
-    echo "3. Download ONNX models (YOLOv8n, YOLOX-s) if not present"
+    echo "3. Download ONNX model (YOLOX-s) if not present"
     echo "4. Build rknn_tk2 Docker container for model compilation"
     echo "5. Setup Docker build environment (bsoe-build)"
     echo "6. Download BrightSign OS source (~20GB) inside Docker container"

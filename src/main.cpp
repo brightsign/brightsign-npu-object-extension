@@ -16,7 +16,7 @@
 #include "queue.h"
 #include "transport.h"
 #include "utils.h"
-#include "yolo.h"
+#include "yolox.h"
 
 #include <opencv2/opencv.hpp>
 #include <vector>

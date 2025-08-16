@@ -3,7 +3,7 @@
 #include <thread>
 
 #include "inference.h"
-#include "yolo.h"
+#include "yolox.h"
 #include "postprocess.h"
 
 
@@ -60,13 +60,13 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
     memset(&empty_results, 0, sizeof(empty_results));
     InferenceResult final_result{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
 
-    printf("calling inference_yolo_model\n");
+    printf("calling inference_yolox_model\n");
     object_detect_result_list results;
     memset(&results, 0, sizeof(results));  // Initialize results to avoid uninitialized data
     
-    int ret = inference_yolo_model(rknn_app_ctx.get(), &image, &results, confidence_threshold);
+    int ret = inference_yolox_model(rknn_app_ctx.get(), &image, &results, confidence_threshold);
     if (ret != 0) {
-        printf("inference_yolo_model fail! ret=%d\n", ret);
+        printf("inference_yolox_model fail! ret=%d\n", ret);
         return final_result;
     }
 
@@ -76,7 +76,7 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
     final_result.selected_classes = selected_classes;  // Pass selected classes along
     final_result.class_mapping = class_mapping;  // Pass class mapping along
     final_result.confidence_threshold = confidence_threshold;  // Pass confidence threshold along
-    printf("inference_yolo_model success! count=%d\n", results.count);
+    printf("inference_yolox_model success! count=%d\n", results.count);
 
     frames++;
     printf("Processed frame %d\n", frames);
@@ -105,9 +105,9 @@ MLInferenceThread::MLInferenceThread(
     // Create and initialize the model with dynamic allocation
     rknn_app_ctx = std::make_unique<rknn_app_context_t>();
     memset(rknn_app_ctx.get(), 0, sizeof(rknn_app_context_t));
-    auto ret = init_yolo_model(model_path, rknn_app_ctx.get());
+    auto ret = init_yolox_model(model_path, rknn_app_ctx.get());
        if (ret != 0) {
-        printf("init_yolo_model fail! ret=%d model_path=%s\n", ret, model_path);
+        printf("init_yolox_model fail! ret=%d model_path=%s\n", ret, model_path);
         // return -1;
     }
 
@@ -116,9 +116,9 @@ MLInferenceThread::MLInferenceThread(
 
 MLInferenceThread::~MLInferenceThread() {
     if (rknn_app_ctx) {
-        auto ret = release_yolo_model(rknn_app_ctx.get());
+        auto ret = release_yolox_model(rknn_app_ctx.get());
         if (ret != 0) {
-            printf("release_yolo_model fail! ret=%d\n", ret);
+            printf("release_yolox_model fail! ret=%d\n", ret);
         }  
     }
 

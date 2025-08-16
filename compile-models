@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# BrightSign YOLO Object Detection - Model Compilation Script
+# BrightSign Object Detection - Model Compilation Script
 # Compiles ONNX models to RKNN format using rknn_tk2 Docker container
 
 set -e
@@ -29,9 +29,8 @@ declare -A PLATFORMS=(
     ["Firebird"]="rk3576"
 )
 
-# Model configurations
+# Model configurations - YOLOX only
 declare -A MODELS=(
-    ["yolov8"]="yolov8n.onnx"
     ["yolox"]="yolox_s.onnx"
 )
 
@@ -41,7 +40,7 @@ usage() {
     echo ""
     echo "Arguments:"
     echo "  PLATFORM            Target platform: XT5, LS5, Firebird (default: all)"
-    echo "  MODEL               Model to compile: yolov8, yolox (default: all)"
+    echo "  MODEL               Model to compile: yolox (default: yolox)"
     echo ""
     echo "Options:"
     echo "  -c, --clean         Clean model directories before compilation"
@@ -51,9 +50,9 @@ usage() {
     echo "  -h, --help          Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0                      # Compile all models for all platforms"
-    echo "  $0 XT5                  # Compile all models for XT5/RK3588"
-    echo "  $0 XT5 yolov8           # Compile YOLOv8 for XT5/RK3588"
+    echo "  $0                      # Compile YOLOX for all platforms"
+    echo "  $0 XT5                  # Compile YOLOX for XT5/RK3588"
+    echo "  $0 XT5 yolox            # Compile YOLOX for XT5/RK3588"
     echo "  $0 --clean LS5 yolox    # Clean and compile YOLOX for LS5/RK3568"
     echo "  $0 --build-container    # Build Docker container first"
     echo ""
@@ -67,8 +66,7 @@ usage() {
     echo "  Firebird -> RK3576 (next-gen players)"
     echo ""
     echo "Model mappings:"
-    echo "  yolov8   -> YOLOv8n (simplified YOLO)"
-    echo "  yolox    -> YOLOX-s (extended YOLO)"
+    echo "  yolox    -> YOLOX-s (object detection model)"
 }
 
 # Parse command line arguments
@@ -175,10 +173,6 @@ check_prerequisites() {
     fi
     
     # Check if required ONNX models exist
-    if [ ! -f "toolkit/rknn_model_zoo/examples/yolov8/model/yolov8n.onnx" ]; then
-        error "YOLOv8 ONNX model not found at toolkit/rknn_model_zoo/examples/yolov8/model/yolov8n.onnx"
-    fi
-    
     if [ ! -f "toolkit/rknn_model_zoo/examples/yolox/model/yolox_s.onnx" ]; then
         error "YOLOX ONNX model not found at toolkit/rknn_model_zoo/examples/yolox/model/yolox_s.onnx"
     fi
@@ -263,18 +257,14 @@ copy_models() {
         # Create install directory
         mkdir -p "../../install/${soc_upper}/model"
         
-        # Copy models if they exist
-        if [ -f "examples/yolov8/model/${soc_upper}/yolov8n.rknn" ]; then
-            cp "examples/yolov8/model/${soc_upper}/yolov8n.rknn" "../../install/${soc_upper}/model/"
-        fi
-        
+        # Copy YOLOX model if it exists
         if [ -f "examples/yolox/model/${soc_upper}/yolox_s.rknn" ]; then
             cp "examples/yolox/model/${soc_upper}/yolox_s.rknn" "../../install/${soc_upper}/model/"
         fi
         
-        # Copy labels (both models use COCO labels) and convert spaces to underscores
-        if [ -f "examples/yolov8/model/coco_80_labels_list.txt" ]; then
-            sed 's/ /_/g' "examples/yolov8/model/coco_80_labels_list.txt" > "../../install/${soc_upper}/model/coco_80_labels_list.txt"
+        # Copy labels (YOLOX uses COCO labels) and convert spaces to underscores
+        if [ -f "examples/yolox/model/coco_80_labels_list.txt" ]; then
+            sed 's/ /_/g' "examples/yolox/model/coco_80_labels_list.txt" > "../../install/${soc_upper}/model/coco_80_labels_list.txt"
         fi
     done
     
@@ -284,8 +274,8 @@ copy_models() {
 
 # Main compilation function
 main() {
-    echo "BrightSign YOLO Object Detection - Model Compilation"
-    echo "==================================================="
+    echo "BrightSign Object Detection - Model Compilation"
+    echo "=============================================="
     
     start_time=$(date +%s)
     
@@ -342,9 +332,6 @@ main() {
         
         if [ -d "$install_dir" ]; then
             echo "  $platform (${soc_upper}):"
-            if [ -f "$install_dir/yolov8n.rknn" ]; then
-                echo "    ✓ YOLOv8: $install_dir/yolov8n.rknn"
-            fi
             if [ -f "$install_dir/yolox_s.rknn" ]; then
                 echo "    ✓ YOLOX: $install_dir/yolox_s.rknn"
             fi

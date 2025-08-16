@@ -12,7 +12,7 @@
 
 ## Overview
 
-This document analyzes how the BrightSign YOLO Object Detection application adheres to fundamental software design principles. The analysis covers SOLID principles, Clean Code practices, Separation of Concerns, CAP theorem considerations, and the implementation of common design patterns.
+This document analyzes how the BrightSign Object Detection application adheres to fundamental software design principles. The analysis covers SOLID principles, Clean Code practices, Separation of Concerns, CAP theorem considerations, and the implementation of common design patterns.
 
 ### Analysis Summary
 
@@ -185,7 +185,7 @@ auto http_transport = std::make_shared<HTTPTransport>("http://api.example.com");
 Publisher http_publisher(http_transport, queue, running, formatter, 1);
 
 // Adding Prometheus formatter requires no changes to Publisher
-auto prometheus_formatter = std::make_shared<PrometheusFormatter>("yolo_metrics");
+auto prometheus_formatter = std::make_shared<PrometheusFormatter>("objdet_metrics");
 Publisher metrics_publisher(transport, queue, running, prometheus_formatter, 1);
 ```
 
@@ -946,7 +946,7 @@ pie title Technical Debt Distribution
 
 ## Conclusion
 
-The BrightSign YOLO Object Detection application demonstrates **excellent adherence to software design principles**. The architecture is well-structured, extensible, and maintainable. The strategic use of design patterns, particularly the Strategy pattern for transport and formatting, enables easy extension without modification of existing code.
+The BrightSign Object Detection application demonstrates **excellent adherence to software design principles**. The architecture is well-structured, extensible, and maintainable. The strategic use of design patterns, particularly the Strategy pattern for transport and formatting, enables easy extension without modification of existing code.
 
 ### Key Strengths
 - ✅ Excellent separation of concerns

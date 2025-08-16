@@ -49,10 +49,10 @@ usage() {
     echo "  -h, --help          Show this help message"
     echo ""
     echo "Examples:"
-    echo "  $0 npu_yolo                              # Rollback to latest backup"
-    echo "  $0 --list-backups npu_yolo              # List available backups"
-    echo "  $0 --backup backup_20250201 npu_yolo    # Rollback to specific backup"
-    echo "  $0 --dry-run npu_yolo                   # Test rollback capability"
+    echo "  $0 npu_obj                              # Rollback to latest backup"
+    echo "  $0 --list-backups npu_obj              # List available backups"
+    echo "  $0 --backup backup_20250201 npu_obj    # Rollback to specific backup"
+    echo "  $0 --dry-run npu_obj                   # Test rollback capability"
 }
 
 # Parse command line arguments
@@ -266,8 +266,8 @@ stop_extension() {
     
     # Method 3: kill processes
     case "$extension_name" in
-        *yolo*)
-            pkill -f "yolo_demo" 2>/dev/null || true
+        *obj*|*objdet*)
+            pkill -f "object_detection_demo" 2>/dev/null || true
             ;;
         *)
             vlog "No specific process kill pattern for $extension_name"

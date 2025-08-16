@@ -13,7 +13,7 @@
 
 ## Overview
 
-The BrightSign YOLO Object Detection application is a computer vision system designed for real-time object detection on BrightSign Players (embedded ARM-based hardware). The architecture features a clear separation of concerns, modular design, and extensible patterns.
+The BrightSign Object Detection application is a computer vision system designed for real-time object detection on BrightSign Players (embedded ARM-based hardware). The architecture features a clear separation of concerns, modular design, and extensible patterns.
 
 ### Key Architectural Characteristics
 
@@ -93,7 +93,7 @@ graph TB
     
     subgraph "Domain Layer"
         INF[Inference Engine]
-        YOLO[YOLO Model]
+        YOLO[Object Detection Model]
         PP[Post-Processing]
     end
     
@@ -400,7 +400,7 @@ flowchart TD
     SOC_DETECT --> RK3576[RK3576 Config]
     SOC_DETECT --> RK3568[RK3568 Config]
     
-    RK3588 --> MODEL_LOAD[Load YOLO Model]
+    RK3588 --> MODEL_LOAD[Load Object Detection Model]
     RK3576 --> MODEL_LOAD
     RK3568 --> MODEL_LOAD
     
@@ -501,11 +501,11 @@ graph TD
     end
     
     subgraph "Configuration Keys"
-        VIDEO_DEV[bsext-yolo-video-device]
-        MODEL_PATH[bsext-yolo-model-path]
-        CLASSES[bsext-yolo-classes]
-        CONFIDENCE[bsext-yolo-confidence-threshold]
-        AUTO_START[bsext-yolo-disable-auto-start]
+        VIDEO_DEV[bsext-obj-video-device]
+        MODEL_PATH[bsext-obj-model-path]
+        CLASSES[bsext-obj-classes]
+        CONFIDENCE[bsext-obj-confidence-threshold]
+        AUTO_START[bsext-obj-disable-auto-start]
     end
     
     DEFAULT --> DEVICE
