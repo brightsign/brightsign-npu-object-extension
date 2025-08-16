@@ -412,9 +412,9 @@ generate_manifest() {
   "manifestVersion": 1,
   
   "extension": {
-    "id": "com.brightsign.yolo-object-detection",
-    "name": "YOLO Object Detection",
-    "shortName": "YOLO",
+    "id": "com.brightsign.object-detection",
+    "name": "Object Detection",
+    "shortName": "ObjDet",
     "version": "$version",
     "description": "$description",
     "author": $author,
@@ -535,10 +535,6 @@ verify_package() {
 
         # Check for models
         local models_found=0
-        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolov8" ]] && [[ -f "$soc_dir/model/yolov8n.rknn" ]]; then
-            models_found=$((models_found + 1))
-            total_files=$((total_files + 1))
-        fi
         if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolox" ]] && [[ -f "$soc_dir/model/yolox_s.rknn" ]]; then
             models_found=$((models_found + 1))
             total_files=$((total_files + 1))
@@ -682,9 +678,6 @@ validate_platform_consistency() {
         
         # Validate model consistency across platforms
         local expected_models=()
-        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolov8" ]]; then
-            expected_models+=("yolov8n.rknn")
-        fi
         if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolox" ]]; then
             expected_models+=("yolox_s.rknn")
         fi
@@ -752,7 +745,7 @@ create_development_package() {
     echo ""
     echo "Development Package Usage:"
     echo "1. Transfer $DEVELOPMENT_PACKAGE to player via DWS"
-    echo "2. On player: mkdir -p /usr/local/yolo && cd /usr/local/yolo"
+    echo "2. On player: mkdir -p /usr/local/objdet && cd /usr/local/objdet"
     echo "3. On player: unzip /storage/sd/$DEVELOPMENT_PACKAGE"
     echo "4. On player: ./bsext_init run"
     echo "Note: Development installation is volatile (lost on reboot)"
@@ -768,10 +761,10 @@ create_extension_package() {
     ../sh/make-extension-lvm || error "Extension creation failed"
 
     # Package the extension
-    zip "../$EXTENSION_PACKAGE" ext_npu_yolo* >/dev/null
+    zip "../$EXTENSION_PACKAGE" ext_npu_obj* >/dev/null
 
     # Clean up temporary files
-    rm -rf ext_npu_yolo*
+    rm -rf ext_npu_obj*
 
     cd ..
 
@@ -783,7 +776,7 @@ create_extension_package() {
     echo "1. Transfer $EXTENSION_PACKAGE to player via DWS"
     echo "2. On player: mkdir -p /usr/local && cd /usr/local"
     echo "3. On player: unzip /storage/sd/$EXTENSION_PACKAGE"
-    echo "4. On player: bash ./ext_npu_yolo_install-lvm.sh"
+    echo "4. On player: bash ./ext_npu_obj_install-lvm.sh"
     echo "5. On player: reboot"
     echo "Note: Extension installation is permanent (persists across reboots)"
 }
@@ -824,7 +817,7 @@ run_validation() {
 
 # Main packaging function
 main() {
-    echo "BrightSign YOLO Object Detection - Package Creation"
+    echo "BrightSign Object Detection - Package Creation"
     echo "=================================================="
     
     # Show configuration
