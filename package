@@ -244,12 +244,25 @@ copy_binaries() {
         # Copy libraries
         mkdir -p "$package_soc_dir/lib"
         
-        # Copy shared libraries from build directory
-        for lib in "$build_dir"/*.so*; do
-            if [[ -f "$lib" ]]; then
-                cp "$lib" "$package_soc_dir/lib/"
-            fi
-        done
+        # First try to copy from install directory (contains all libraries)
+        local install_lib_dir="install/$soc/lib"
+        if [[ -d "$install_lib_dir" ]]; then
+            log "Copying libraries from install directory for $soc..."
+            # Copy all .so files from install directory  
+            for lib in "$install_lib_dir"/*.so*; do
+                if [[ -f "$lib" ]]; then
+                    cp "$lib" "$package_soc_dir/lib/"
+                fi
+            done
+        else
+            # Fallback: Copy shared libraries from build directory (legacy approach)
+            log "Install directory not found, copying from build directory for $soc..."
+            for lib in "$build_dir"/*.so*; do
+                if [[ -f "$lib" ]]; then
+                    cp "$lib" "$package_soc_dir/lib/"
+                fi
+            done
+        fi
 
         success "$soc binaries copied"
     done

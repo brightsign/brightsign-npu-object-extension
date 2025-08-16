@@ -541,11 +541,7 @@ validate_manifest() {
     
     # Check if jq is available for parsing
     if ! command -v jq >/dev/null 2>&1; then
-        echo "⚠️  WARNING: jq utility not found, skipping advanced manifest validation"
-        echo "💡 Resolution: Install jq for complete validation"
-        echo "   - Install jq: 'apt-get install jq' or equivalent"
-        echo "   - Basic validation will continue without jq"
-        echo "   - Some compatibility checks may be skipped"
+        echo "ℹ️  Using basic manifest validation (jq not available)"
         return 0
     fi
     
