@@ -1,8 +1,8 @@
-# BrightSign YOLO Object Detection Extension
+# BrightSign Object Detection Extension
 
 **Automated AI object detection extension for BrightSign Series 5 players using Rockchip NPU acceleration.**
 
-This project provides a complete, automated build system to create BrightSign extensions that run YOLO object detection (YOLOv8 and YOLOX) on the NPU at ~30 FPS with selective class detection and configurable confidence thresholds.
+This project provides a complete, automated build system to create BrightSign extensions that run object detection with YOLOX on the NPU at ~30 FPS with selective class detection and configurable confidence thresholds.
 
 **NEW**: Now supports selective class detection - focus on specific object classes while preserving complete detection data!
 
@@ -58,8 +58,9 @@ In a typical development workflow, steps 1 - 4 (setup, model compilation, build 
 ```
 
 **Key Features:**
+
 - **Progress tracking** with time estimates
-- **Skip options** for already completed steps  
+- **Skip options** for already completed steps
 - **Partial execution** (start/stop at specific steps)
 - **Verbose mode** for detailed output
 - **Auto mode** for CI/CD pipelines
@@ -69,13 +70,13 @@ In a typical development workflow, steps 1 - 4 (setup, model compilation, build 
 
 **✅ Success**: You now have production-ready extension packages:
 
-- `yolo-dev-<timestamp>.zip` (development/testing)
-- `yolo-ext-<timestamp>.zip` (production deployment)
+- `objdet-dev-<timestamp>.zip` (development/testing)
+- `objdet-ext-<timestamp>.zip` (production deployment)
 
 **🎯 Deploy to Player**:
 
 1. Transfer extension package to BrightSign player via DWS
-2. Install: `bash ./ext_npu_yolo_install-lvm.sh && reboot`
+2. Install: `bash ./ext_npu_obj_install-lvm.sh && reboot`
 3. Extension auto-starts with USB camera detection
 
 ## 🚀 Build using Github Action
@@ -90,8 +91,7 @@ __Total Time__: approx. 10 minutes
 6. If SDK has been changed - check __Build SDK__ (don't needed in most cases - and it'll take about 2-3h to build)
 7. __Run workflow__
 
-When Action has been completed - packages can be found in https://builds-npu.brightsign.io/browse/brightsign-npu-yolox
-
+When Action has been completed - packages can be found in https://builds-npu.brightsign.io/browse/brightsign-npu-object-detect
 
 ## 📋 Requirements & Prerequisites
 
@@ -120,7 +120,7 @@ When Action has been completed - packages can be found in https://builds-npu.bri
 
 __Important__: Apple Silicon Macs are not supported. Use x86_64 Linux or Windows with WSL2.
 
-__SDK and Models__ built for this project can be found in here - https://builds-npu.brightsign.io/browse/brightsign-npu-yolox
+__SDK and Models__ built for this project can be found in here - https://builds-npu.brightsign.io/browse/brightsign-npu-object-detect
 
 ## ⚙️ Configuration & Customization
 
@@ -130,23 +130,23 @@ The extension is highly configurable via BrightSign registry keys:
 
 ```bash
 # Auto-start control
-registry write extension bsext-yolo-disable-auto-start true
+registry write extension bsext-obj-disable-auto-start true
 
 # Camera device override
-registry write extension bsext-yolo-video-device /dev/video1
+registry write extension bsext-obj-video-device /dev/video1
 
 # Custom model path
-registry write extension bsext-yolo-model-path /path/to/custom.rknn
+registry write extension bsext-obj-model-path /path/to/custom.rknn
 ```
 
 ### AI Configuration
 
 ```bash
 # Selective class detection (only show/count specific objects)
-registry write extension bsext-yolo-classes person,car,dog
+registry write extension bsext-obj-classes person,car,dog
 
 # Confidence threshold (0.0-1.0, default: 0.3)
-registry write extension bsext-yolo-confidence-threshold 0.6
+registry write extension bsext-obj-confidence-threshold 0.6
 ```
 
 ### COCO Classes Reference
@@ -214,21 +214,22 @@ Comprehensive update workflow with policy enforcement, version validation, and a
 
 ```bash
 # Update extension with full validation
-./sh/update-extension.sh yolo-ext-20250201-123456.zip
+./sh/update-extension.sh objdet-ext-20250201-123456.zip
 
 # Test update compatibility without executing  
-./sh/update-extension.sh --dry-run yolo-ext-20250201-123456.zip
+./sh/update-extension.sh --dry-run objdet-ext-20250201-123456.zip
 
 # Force update ignoring policy restrictions
-./sh/update-extension.sh --force --verbose yolo-ext-20250201-123456.zip
+./sh/update-extension.sh --force --verbose objdet-ext-20250201-123456.zip
 
 # Update without configuration backup (not recommended)
-./sh/update-extension.sh --no-backup yolo-ext-20250201-123456.zip
+./sh/update-extension.sh --no-backup objdet-ext-20250201-123456.zip
 ```
 
 **Update Policies:**
+
 - **`automatic`**: Allow automated updates (development environments)
-- **`manual`**: Require explicit approval (production default) 
+- **`manual`**: Require explicit approval (production default)
 - **`blocked`**: Prevent updates (deprecated/end-of-life versions)
 
 ### Atomic Rollback System
@@ -237,19 +238,19 @@ Safe rollback to previous versions with LVM-based atomic operations:
 
 ```bash
 # Rollback to latest backup
-./sh/rollback-extension.sh npu_yolo
+./sh/rollback-extension.sh npu_obj
 
 # List available backups
-./sh/rollback-extension.sh --list-backups npu_yolo
+./sh/rollback-extension.sh --list-backups npu_obj
 
 # Rollback to specific backup
-./sh/rollback-extension.sh --backup backup_20250201_143022 npu_yolo
+./sh/rollback-extension.sh --backup backup_20250201_143022 npu_obj
 
 # Test rollback capability without executing
-./sh/rollback-extension.sh --dry-run npu_yolo
+./sh/rollback-extension.sh --dry-run npu_obj
 
 # Force rollback even if policy doesn't support it
-./sh/rollback-extension.sh --force npu_yolo
+./sh/rollback-extension.sh --force npu_obj
 ```
 
 ### Configuration Backup & Restore
@@ -266,8 +267,9 @@ Built-in configuration management with automatic preservation:
 ```
 
 **What gets backed up:**
+
 - Registry configuration (user settings)
-- User data files (`/tmp/yolo_output`, `/tmp/results.json`) 
+- User data files (`/tmp/objdet_output`, `/tmp/results.json`)
 - Extension state and preferences
 - Manifest metadata for reference
 
@@ -293,6 +295,7 @@ Comprehensive validation with detailed reporting:
 ```
 
 **Validation Features:**
+
 - JSON syntax and schema compliance
 - Semantic validation of version formats
 - Compatibility requirement checking
@@ -305,12 +308,14 @@ Comprehensive validation with detailed reporting:
 Pre-installation checks with cross-compilation awareness:
 
 **Host-side validation** (during packaging):
+
 - ✅ Package structure and completeness
-- ✅ Manifest schema compliance  
+- ✅ Manifest schema compliance
 - ✅ Size calculations vs declared requirements
 - ✅ Cross-platform consistency
 
 **Target-side validation** (during installation):
+
 - ✅ Hardware compatibility (SOC, NPU, camera)
 - ✅ OS version compatibility
 - ✅ Storage space availability
@@ -351,7 +356,7 @@ Enhanced development experience with comprehensive tooling:
 ./package --ext-only
 
 # Package specific platform/model combinations
-./package --soc RK3588 --model yolov8
+./package --soc RK3588
 ```
 
 ### Installation Methods
@@ -360,8 +365,8 @@ Enhanced development experience with comprehensive tooling:
 
 ```bash
 # On player
-mkdir -p /usr/local/yolo && cd /usr/local/yolo
-unzip /storage/sd/yolo-dev-*.zip
+mkdir -p /usr/local/obj && cd /usr/local/obj
+unzip /storage/sd/objdet-dev-*.zip
 ./bsext_init run  # Test in foreground
 ```
 
@@ -369,8 +374,8 @@ unzip /storage/sd/yolo-dev-*.zip
 
 ```bash
 # On player
-cd /usr/local && unzip /storage/sd/yolo-ext-*.zip
-bash ./ext_npu_yolo_install-lvm.sh
+cd /usr/local && unzip /storage/sd/objdet-ext-*.zip
+bash ./ext_npu_obj_install-lvm.sh
 reboot  # Extension auto-starts after reboot
 ```
 
@@ -409,7 +414,7 @@ Benefits:
 ./build-apps LS5      # LS-5 players only
 
 # Compile specific models only
-./compile-models XT5 yolov8    # YOLOv8 for XT-5 only
+./compile-models XT5           # Compile models for XT-5 only
 ./compile-models --clean       # Clean rebuild all models
 
 # SDK build options
@@ -451,6 +456,7 @@ Benefits:
 ./compile-models --clean
 ./setup  # Re-run if Docker images corrupted
 ```
+
 ### Image Stream Server
 
 The **BrightSign Image Stream Server** is a built-in networking feature that serves camera frames over HTTP. Image Stream Server will start along with voice detection extension as a standalone daemon running in the background.The bs-image-stream-server continuously monitors a local image file by gaze detection and serves it via HTTP at 30 FPS. It specifically watches /tmp/output.jpg since that is where the BSMP files write their output.
@@ -463,10 +469,11 @@ Enable or disable the image stream server using the registry options:
 
 | Port Value | Behavior |
 |------------|----------|
-| `0` | **Disabled** - Image stream server is turned off (recommended for this extension) |
-| `20200` | **Default** - Serves camera feed at `http://player-ip:20200/image_stream.jpg` |
+| `0` | __Disabled__ - Image stream server is turned off (recommended for this extension) |
+| `20200` | __Default__ - Serves camera feed at `http://player-ip:20200/image_stream.jpg` |
 
 **Usage Examples:**
+
 ```bash
 # Disable image stream server
 registry write networking bs-image-stream-server-port 0
@@ -486,7 +493,7 @@ Replace default models with your own ONNX models:
 
 1. Place ONNX model in `toolkit/rknn_model_zoo/examples/custom/model/`
 2. Run `./compile-models` to convert to RKNN format
-3. Set registry key: `bsext-yolo-model-path /path/to/custom.rknn`
+3. Set registry key: `bsext-obj-model-path /path/to/custom.rknn`
 
 ### Multi-Platform Development
 
@@ -500,7 +507,7 @@ The extension automatically detects platform at runtime:
 
 - **Confidence threshold**: Higher values reduce false positives
 - **Class filtering**: Improves performance by reducing output processing
-- **Model selection**: YOLOv8 (faster) vs YOLOX (more accurate)
+- **Model selection**: YOLOX provides excellent accuracy for object detection
 
 ## 📚 Technical Documentation
 
@@ -553,7 +560,7 @@ cd toolkit/rknn-toolkit2/docker
 # Compile models manually
 cd ../../../rknn_model_zoo
 docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
-    -c "cd /zoo/examples/yolov8/python && python convert.py ../model/yolov8n.onnx rk3588 i8 ../model/RK3588/yolov8n.rknn"
+    -c "cd /zoo/examples/YOLOX/python && python convert.py ../model/yolox_s.onnx rk3588 i8 ../model/RK3588/yolox_s.rknn"
 ```
 
 ### Manual SDK Building
@@ -585,10 +592,9 @@ make && make install
 
 ### Supported Models
 
-- ✅ **YOLOv8** (nano, small, medium, large, xl) - YOLO Simplified architecture
 - ✅ **YOLOX** (nano, tiny, small, medium, large, xl) - YOLOX architecture
 - ✅ **COCO 80-class** models (default)
-- ✅ **Custom trained** models (if following YOLO/YOLOX output formats)
+- ✅ **Custom trained** models (if following YOLOX output formats)
 
 ### Licensing
 
