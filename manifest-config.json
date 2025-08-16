@@ -1,14 +1,14 @@
 {
   "extension": {
     "version": "1.2.0",
-    "description": "NPU-accelerated object detection using YOLO models",
+    "description": "NPU-accelerated object detection",
     "author": {
       "name": "BrightSign LLC",
       "email": "support@brightsign.biz",
       "url": "https://www.brightsign.biz"
     },
     "license": "Apache-2.0",
-    "homepage": "https://github.com/brightsign/cv-npu-yolo-object-detect",
+    "homepage": "https://github.com/brightsign/cv-npu-object-detect",
     "category": "ai-vision"
   },
   

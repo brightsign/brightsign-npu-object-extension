@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# BrightSign YOLO Object Detection - C++ Application Build Script
+# BrightSign Object Detection - C++ Application Build Script
 # Builds the C++ application for all platforms using installed SDK
 
 set -e
@@ -29,7 +29,7 @@ declare -A PLATFORMS=(
 
 usage() {
     echo "Usage: $0 [OPTIONS] [PLATFORM]"
-    echo "Build BrightSign YOLO Object Detection C++ application"
+    echo "Build BrightSign Object Detection C++ application"
     echo ""
     echo "Arguments:"
     echo "  PLATFORM              Target platform: XT5, LS5, Firebird (default: all)"
@@ -212,23 +212,23 @@ build_platform() {
     fi
     
     # Check if build succeeded
-    if [ -f "$build_dir/yolo_demo" ]; then
+    if [ -f "$build_dir/object_detection_demo" ]; then
         success "$platform build completed successfully"
         
         # List build artifacts
         if [ "$VERBOSE" = true ]; then
             echo "Build artifacts:"
-            ls -la "$build_dir/yolo_demo"
+            ls -la "$build_dir/object_detection_demo"
             ls -la "$build_dir/"*.so 2>/dev/null || true
         fi
     else
-        error "Build failed - yolo_demo not found in $build_dir"
+        error "Build failed - object_detection_demo not found in $build_dir"
     fi
 }
 
 # Main build function
 main() {
-    echo "BrightSign YOLO Object Detection - C++ Application Build"
+    echo "BrightSign Object Detection - C++ Application Build"
     echo "========================================================"
     
     start_time=$(date +%s)
@@ -257,14 +257,14 @@ main() {
     echo "Build artifacts:"
     for platform in "${!PLATFORMS[@]}"; do
         local build_dir="build_${platform,,}"
-        if [ -f "$build_dir/yolo_demo" ]; then
-            echo "  ✓ $platform: $build_dir/yolo_demo"
+        if [ -f "$build_dir/object_detection_demo" ]; then
+            echo "  ✓ $platform: $build_dir/object_detection_demo"
         fi
     done
     
     echo ""
     echo "Next steps:"
-    echo "1. Test locally: ./build_xt5/yolo_demo /path/to/image.jpg"
+    echo "1. Test locally: ./build_xt5/object_detection_demo /path/to/image.jpg"
     echo "2. Package for deployment (use existing packaging scripts)"
     echo "3. Deploy to BrightSign player"
 }

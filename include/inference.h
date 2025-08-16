@@ -17,12 +17,12 @@
 #include <opencv2/videoio.hpp>
 
 #include "queue.h"
-#include "yolo.h"
+#include "yolox.h"
 #include "frame_writer.h"
 
 // Struct to hold ML inference results
 struct InferenceResult {
-    object_detect_result_list detections;  // YOLO detection results
+    object_detect_result_list detections;  // Object detection results
     std::chrono::system_clock::time_point timestamp;
     std::vector<int> selected_classes;  // Selected class IDs for filtering
     std::unordered_map<std::string, int> class_mapping;  // Class name to ID mapping

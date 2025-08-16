@@ -1,6 +1,6 @@
 # Orange Pi Development Guide
 
-This guide covers development and testing using Orange Pi boards (OPi) as an alternative development environment for the BrightSign YOLO Object Detection project.
+This guide covers development and testing using Orange Pi boards (OPi) as an alternative development environment for the BrightSign Object Detection project.
 
 ## Overview
 
@@ -47,7 +47,7 @@ This creates compiled RKNN models in the following locations:
 ```
 install/
 ├── RK3588/model/          # For Orange Pi 5/5B and BrightSign XT-5
-│   ├── yolov8n.rknn      # YOLOv8 nano model
+│   ├── yolov8n.rknn      # Legacy YOLOv8 model (deprecated)
 │   ├── yolox_s.rknn      # YOLOX small model
 │   └── coco_80_labels_list.txt  # Class labels
 ├── RK3576/model/          # For Firebird dev boards
@@ -59,16 +59,15 @@ install/
 #### Transfer to Orange Pi:
 ```bash
 # Copy the entire project tree to Orange Pi
-scp -r /path/to/cv-npu-yolo-object-detect orangepi:/home/user/
+scp -r /path/to/cv-npu-object-detect orangepi:/home/user/
 
 # Or copy just the compiled models if project already exists on Orange Pi
-scp -r install/ orangepi:/home/user/cv-npu-yolo-object-detect/
+scp -r install/ orangepi:/home/user/cv-npu-object-detect/
 ```
 
 **Model Location on Orange Pi**: After copying, compiled models will be available at:
 - **Primary models**: `install/RK3588/model/` (compatible with Orange Pi 5 series)
-- **YOLOv8**: `install/RK3588/model/yolov8n.rknn`
-- **YOLOX**: `install/RK3588/model/yolox_s.rknn`
+- **YOLOX**: `install/RK3588/model/yolox_s.rknn` (primary model)
 - **Labels**: `install/RK3588/model/coco_80_labels_list.txt`
 
 ### 2. Building on Orange Pi
@@ -76,7 +75,7 @@ scp -r install/ orangepi:/home/user/cv-npu-yolo-object-detect/
 All commands in this section are executed on the Orange Pi (via SSH or directly):
 
 ```bash
-cd cv-npu-yolo-object-detect
+cd cv-npu-object-detect
 
 # Clean any previous builds
 rm -rf build
@@ -99,30 +98,26 @@ make install
 After building, you can test the application directly using the compiled models:
 
 ```bash
-cd cv-npu-yolo-object-detect
+cd cv-npu-object-detect
 
-# Test YOLOv8 with USB camera (V4L device mode)
-./build/yolo_demo install/RK3588/model/yolov8n.rknn /dev/video0
-
-# Test YOLOX with USB camera
-./build/yolo_demo install/RK3588/model/yolox_s.rknn /dev/video0
+# Test YOLOX with USB camera (V4L device mode)
+./build/object_detection_demo install/RK3588/model/yolox_s.rknn /dev/video0
 
 # Test with image file (one-shot mode)
-./build/yolo_demo install/RK3588/model/yolov8n.rknn /path/to/test_image.jpg
+./build/object_detection_demo install/RK3588/model/yolox_s.rknn /path/to/test_image.jpg
 
 # Test with class filtering (only show specific objects)
-./build/yolo_demo install/RK3588/model/yolov8n.rknn /dev/video0 --classes person,car,dog
+./build/object_detection_demo install/RK3588/model/yolox_s.rknn /dev/video0 --classes person,car,dog
 
 # Test with confidence threshold (reduce false positives)
-./build/yolo_demo install/RK3588/model/yolov8n.rknn /dev/video0 --confidence-threshold 0.5
+./build/object_detection_demo install/RK3588/model/yolox_s.rknn /dev/video0 --confidence-threshold 0.5
 
 # Test both class filtering and confidence threshold
-./build/yolo_demo install/RK3588/model/yolox_s.rknn /dev/video0 --classes person,bicycle --confidence-threshold 0.6
+./build/object_detection_demo install/RK3588/model/yolox_s.rknn /dev/video0 --classes person,bicycle --confidence-threshold 0.6
 ```
 
 **Available Models for Testing:**
-- **YOLOv8**: `install/RK3588/model/yolov8n.rknn` (YOLO Simplified architecture)
-- **YOLOX**: `install/RK3588/model/yolox_s.rknn` (YOLOX architecture)
+- **YOLOX**: `install/RK3588/model/yolox_s.rknn` (YOLOX architecture - primary model)
 - **Labels**: `install/RK3588/model/coco_80_labels_list.txt` (80 COCO classes)
 
 **Model Verification:**
@@ -130,7 +125,6 @@ cd cv-npu-yolo-object-detect
 # Verify all required models are present
 ls -la install/RK3588/model/
 # Should show:
-# yolov8n.rknn (several MB)
 # yolox_s.rknn (several MB)  
 # coco_80_labels_list.txt (small text file)
 
@@ -145,8 +139,8 @@ Orange Pi provides excellent debugging capabilities:
 
 ```bash
 # Debug with GDB
-gdb ./build/yolo_demo
-(gdb) run install/RK3588/model/yolov8n.rknn /dev/video0
+gdb ./build/object_detection_demo
+(gdb) run install/RK3588/model/yolox_s.rknn /dev/video0
 
 # Monitor system resources
 htop
@@ -204,7 +198,7 @@ After development and testing on Orange Pi:
    ```bash
    # Create deployment package
    cd install
-   zip -r ../yolo-demo-$(date +%s).zip ./
+   zip -r ../objdet-demo-$(date +%s).zip ./
    ```
 
 3. **Deploy to BrightSign player** following the extension installation process.
@@ -243,7 +237,6 @@ ffplay /dev/video0
 ```bash
 # Verify model files exist and are readable
 ls -la install/RK3588/model/
-file install/RK3588/model/yolov8n.rknn
 file install/RK3588/model/yolox_s.rknn
 
 # Check model file sizes (should be several MB each)
@@ -261,7 +254,7 @@ cat install/RK3588/model/coco_80_labels_list.txt | head -10
 ./compile-models
 
 # Then copy to Orange Pi:
-scp -r install/ orangepi:/home/user/cv-npu-yolo-object-detect/
+scp -r install/ orangepi:/home/user/cv-npu-object-detect/
 ```
 
 **Build errors**:

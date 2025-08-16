@@ -27,7 +27,7 @@ on:
 
 env:
   DOCKER_IMAGE: bsoe-build
-  S3_URL: s3://bs-npu-artifacts-cicd/brightsign-npu-yolox
+  S3_URL: s3://bs-npu-artifacts-cicd/brightsign-npu-object-detect
 
 jobs:
   build-extension:
@@ -148,5 +148,5 @@ jobs:
 
       - name: Export dev packages
         run: |
-          aws s3 cp ./yolo-dev-*.zip ${{ env.S3_URL }}/packages/development/
-          aws s3 cp ./yolo-ext-*.zip ${{ env.S3_URL }}/packages/extension/
+          aws s3 cp ./objdet-dev-*.zip ${{ env.S3_URL }}/packages/development/
+          aws s3 cp ./objdet-ext-*.zip ${{ env.S3_URL }}/packages/extension/

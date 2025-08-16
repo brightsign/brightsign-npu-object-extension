@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "Build yolo_demo",
+            "label": "Build object_detection_demo",
             "type": "shell",
             "command": "cd ${workspaceFolder} && make -C build",
             "group": {

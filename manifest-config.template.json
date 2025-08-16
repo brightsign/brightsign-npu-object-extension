@@ -104,7 +104,7 @@
     ],
     "_registryNotes": [
       "Define user-configurable settings accessible via BrightSign registry",
-      "Registry keys will be prefixed with 'bsext-yolo-' automatically"
+      "Registry keys will be prefixed with 'bsext-obj-' automatically"
     ]
   },
   

@@ -31,7 +31,7 @@ AND, it seems we build yolov8n - and we just need to clip that out.  Can't even 
 [ ] no code comments say 'yolo' or 'yolov8'
 [ ] compile-models script has with no model choices -- e.g. `yolov8`. ONLY yolox
 [ ] executable binary name should not contain 'yolo' -- use 'object_detection_demo'
-[ ] extension name should not contain 'yolo' -- use `bsext-obj`
+[ ] extension name should not contain 'yolo' -- use `bsext-objdet`
 [ ] no output files such as `/tmp/yolo_output*` should contain 'yolo', use 'objdet'
 [ ] manifest files and samples should not refer to 'yolo' only 'objdet'
 [ ] github action output directory should not contain 'yolo' use 'object-detect'

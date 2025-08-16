@@ -2,9 +2,7 @@
 
 **Automated AI object detection extension for BrightSign Series 5 players using Rockchip NPU acceleration.**
 
-This project provides a complete, automated build system to create BrightSign extensions that run object detection with YOLOX on the NPU at ~30 FPS with selective class detection and configurable confidence thresholds.
-
-**NEW**: Now supports selective class detection - focus on specific object classes while preserving complete detection data!
+This project provides a complete, automated build system to create BrightSign extensions that run object detection on the NPU at ~30 FPS with selective class detection and configurable confidence thresholds.
 
 ## 🚀 Quick Start (Complete Automated Workflow)
 
@@ -15,7 +13,7 @@ __Total Time__: 60-90 minutes | __Prerequisites__: Docker, git, x86_64 Linux hos
 ```bash
 # 1. Clone and setup environment (5-10 minutes)
 git clone <repository-url>
-cd cv-npu-yolo-object-detect
+cd brightsign-npu-object-extension
 ./setup
 
 # 2. Compile ONNX models to RKNN format (3-5 minutes)
@@ -37,8 +35,6 @@ cd cv-npu-yolo-object-detect
 In a typical development workflow, steps 1 - 4 (setup, model compilation, build and install the sdk) will need to only be done once.  Building the apps and packaging them will likely be repeated as the developer changes the app code.
 
 ## 🤖 Automated Build Script
-
-**NEW**: Use the automated build script to run all steps with a single command:
 
 ```bash
 # Run all steps automatically (no prompts)
@@ -76,7 +72,7 @@ In a typical development workflow, steps 1 - 4 (setup, model compilation, build 
 **🎯 Deploy to Player**:
 
 1. Transfer extension package to BrightSign player via DWS
-2. Install: `bash ./ext_npu_obj_install-lvm.sh && reboot`
+2. Install: `bash ./ext_objdet_install-lvm.sh && reboot`
 3. Extension auto-starts with USB camera detection
 
 ## 🚀 Build using Github Action
@@ -168,8 +164,6 @@ __Note__: Use underscores instead of spaces (e.g., `cell_phone`, not `cell phone
 
 ## 📄 Extension Versioning & Manifest
 
-**NEW in v1.2.0**: This extension now includes BrightSign's new manifest system for version management and compatibility checking.
-
 ### Version Information
 
 - **Current Version**: 1.2.0
@@ -205,8 +199,6 @@ cp manifest-config.template.json manifest-config.json
 📖 **See [Manifest Guide](docs/manifest-guide.md) for complete documentation**
 
 ## 🚀 Phase 3: Advanced Extension Management
-
-**NEW in v1.2.0**: Complete automated update management, rollback capabilities, and enhanced validation system.
 
 ### Update Management & Orchestration
 
@@ -414,7 +406,7 @@ Benefits:
 ./build-apps LS5      # LS-5 players only
 
 # Compile specific models only
-./compile-models XT5           # Compile models for XT-5 only
+./compile-models XT5           # YOLOX for XT-5 only
 ./compile-models --clean       # Clean rebuild all models
 
 # SDK build options
@@ -457,34 +449,6 @@ Benefits:
 ./setup  # Re-run if Docker images corrupted
 ```
 
-### Image Stream Server
-
-The **BrightSign Image Stream Server** is a built-in networking feature that serves camera frames over HTTP. Image Stream Server will start along with voice detection extension as a standalone daemon running in the background.The bs-image-stream-server continuously monitors a local image file by gaze detection and serves it via HTTP at 30 FPS. It specifically watches /tmp/output.jpg since that is where the BSMP files write their output.
-
-This is intended for development and testing purposes only.
-
-Enable or disable the image stream server using the registry options:
-
-**Configuration Options:**
-
-| Port Value | Behavior |
-|------------|----------|
-| `0` | __Disabled__ - Image stream server is turned off (recommended for this extension) |
-| `20200` | __Default__ - Serves camera feed at `http://player-ip:20200/image_stream.jpg` |
-
-**Usage Examples:**
-
-```bash
-# Disable image stream server
-registry write networking bs-image-stream-server-port 0
-
-# Enable on default port 20200
-registry write networking bs-image-stream-server-port 20200
-
-```
-
-> **Note**: Changes to the image stream server port require a player reboot to take effect.
-
 ## 🎯 Advanced Usage
 
 ### Custom Models
@@ -507,7 +471,7 @@ The extension automatically detects platform at runtime:
 
 - **Confidence threshold**: Higher values reduce false positives
 - **Class filtering**: Improves performance by reducing output processing
-- **Model selection**: YOLOX provides excellent accuracy for object detection
+- **Model selection**: YOLOX (optimized for accuracy and performance)
 
 ## 📚 Technical Documentation
 
@@ -560,7 +524,7 @@ cd toolkit/rknn-toolkit2/docker
 # Compile models manually
 cd ../../../rknn_model_zoo
 docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
-    -c "cd /zoo/examples/YOLOX/python && python convert.py ../model/yolox_s.onnx rk3588 i8 ../model/RK3588/yolox_s.rknn"
+    -c "cd /zoo/examples/yolox/python && python convert.py ../model/yolox_s.onnx rk3588 i8 ../model/RK3588/yolox_s.rknn"
 ```
 
 ### Manual SDK Building

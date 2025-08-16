@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# Setup environment for BrightSign YOLO Object Detection
+# Setup environment for BrightSign Object Detection
 # This script sets up the build environment for development
 
 # Detect if running on BrightSign player or development host
 if [ -f "/etc/brightsign-version" ]; then
     echo "Detected BrightSign player environment"
     # On player, set up extension paths
-    export PATH="/var/volatile/bsext/ext_npu_yolo/usr/bin:$PATH"
-    export LD_LIBRARY_PATH="/var/volatile/bsext/ext_npu_yolo/usr/lib:$LD_LIBRARY_PATH"
+    export PATH="/var/volatile/bsext/ext_npu_obj/usr/bin:$PATH"
+    export LD_LIBRARY_PATH="/var/volatile/bsext/ext_npu_obj/usr/lib:$LD_LIBRARY_PATH"
     
     # If Python extension is available
     if [ -d "/var/volatile/bsext/ext_pydev" ]; then

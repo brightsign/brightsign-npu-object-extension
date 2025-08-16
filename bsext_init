@@ -1,21 +1,20 @@
 #!/bin/bash
 ### BEGIN INIT INFO
-# Provides:          bsext-yolo
+# Provides:          bsext-objdet
 # Required-Start:    $remote_fs $syslog
 # Required-Stop:     $remote_fs $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: BrightSign Yolo Object Detection Extension
-# Description:       Runs the BrightSign NPU-based Yolo Object detection service
+# Short-Description: BrightSign Object Detection Extension
+# Description:       Runs the BrightSign NPU-based Object detection service
 ### END INIT INFO
 
 # Source function library if it exists
 [ -f /etc/init.d/functions ] && . /etc/init.d/functions
 
 SCRIPT_PATH=$(dirname $(realpath $0))
-DAEMON_NAME="bsext-yolo"
+DAEMON_NAME="bsext-obj"
 PIDFILE="/var/run/${DAEMON_NAME}.pid"
-STREAM_SERVER_PIDFILE="/var/run/bsext-image-stream-server.pid"
 
 # defaults -- these can be overridden by the registry
 DISABLE_AUTO_START=false
@@ -673,8 +672,8 @@ validate_manifest() {
     return 0
 }
 
-# Common function to run the attention demo
-run_yolo_demo() {
+# Common function to run the object detection demo
+run_object_detection_demo() {
     # Get command arguments from setup function
 
     SOC_NAME=$(get_soc_name)
@@ -705,27 +704,10 @@ run_yolo_demo() {
     if [ "$background" = "true" ]; then
         # Run as a daemon in the background
         start-stop-daemon --start --background --make-pidfile --pidfile ${PIDFILE} \
-                          --exec ${SOC_HOME}/yolo_demo -- ${CMD_ARGS}
+                          --exec ${SOC_HOME}/object_detection_demo -- ${CMD_ARGS}
     else
         # Run directly in foreground
-        ${SOC_HOME}/yolo_demo ${CMD_ARGS}
-    fi
-}
-
-run_stream_server() {
-    # Default to running in foreground
-    echo "run_stream_server called with background=$2"
-    local background=$1
-    local port=$2
-    echo "run_stream_server called with port=${port}"
-    if [ "$background" = "true" ]; then
-        # Run as a daemon in the background
-        echo "start-stop daemon =${SOC_HOME}/image-stream-server"
-        start-stop-daemon --start --background --make-pidfile --pidfile ${STREAM_SERVER_PIDFILE} \
-                          --exec ${SOC_HOME}/image-stream-server -- -port ${port}
-    else
-        # Run directly in foreground
-        ${SOC_HOME}/image-stream-server -port ${port}
+        ${SOC_HOME}/object_detection_demo ${CMD_ARGS}
     fi
 }
 
@@ -742,29 +724,12 @@ do_start() {
     fi
 
     # Start the attention_demo process as a daemon
-    run_yolo_demo true
-
-    STREAM_SERVER_PORT=20200  # default port for image stream server
-    reg_stream_server_port=$(registry networking bs-image-stream-server-port)
-    echo "Starting image stream server on port ${reg_stream_server_port}"
-    if [ -n "${reg_stream_server_port}" ]; then
-        STREAM_SERVER_PORT=${reg_stream_server_port}
-    fi
-
-    if [ "${STREAM_SERVER_PORT}" = "0" ]; then
-        echo "Image stream server is disabled (port set to 0)"
-        return
-    fi
-    # Start the image stream server process as a daemon
-    run_stream_server true ${STREAM_SERVER_PORT}
+    run_object_detection_demo true
 }
 
 do_stop() {
     start-stop-daemon --stop --pidfile ${PIDFILE}
     rm -f ${PIDFILE}
-
-    start-stop-daemon --stop --pidfile ${STREAM_SERVER_PIDFILE}
-    rm -f ${STREAM_SERVER_PIDFILE}
 }
 
 # Configuration backup and restore functions for Phase 3
@@ -793,7 +758,7 @@ backup_configuration() {
     fi
     
     # Backup user data directories
-    local data_dirs=("/tmp/yolo_output" "/var/log/bsext-yolo" "/tmp/results.json" "/tmp/output.jpg")
+    local data_dirs=("/tmp/objdet_output" "/var/log/bsext-obj" "/tmp/results.json" "/tmp/output.jpg")
     for data_path in "${data_dirs[@]}"; do
         if [[ -e "$data_path" ]]; then
             local data_name=$(basename "$data_path")
@@ -918,8 +883,7 @@ case "$1" in
         echo "Running ${DAEMON_NAME} in foreground"
         validate_manifest
         # Run directly in foreground (not as daemon)
-        run_yolo_demo false
-	run_stream_server false 20200
+        run_object_detection_demo false
         ;;
     backup)
         echo "Creating configuration backup for ${DAEMON_NAME}"
