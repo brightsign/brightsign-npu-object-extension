@@ -6,7 +6,7 @@ This project provides a complete, automated build system to create BrightSign ex
 
 ## Release Status
 
-This is an ALPHA quality release, intended mostly for educational purposes. This model is not tuned for optimum performance and has had only standard testing.  NOT RECOMMENDED FOR PRODUCITON USE.
+This is an **ALPHA** quality release, intended mostly for educational purposes. This model is not tuned for optimum performance and has had only standard testing.  **NOT RECOMMENDED FOR PRODUCTION USE**.
 
 ## 🚀 Quick Start (Complete Automated Workflow)
 
