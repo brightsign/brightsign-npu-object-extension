@@ -241,10 +241,25 @@ copy_binaries() {
             continue
         fi
 
+        # Copy image stream server binary
+        if [[ -f "$build_dir/image-stream-server" ]]; then
+            cp "$build_dir/image-stream-server" "$package_soc_dir/"
+            chmod +x "$package_soc_dir/image-stream-server"
+        else
+            warn "Image stream server binary not found in $build_dir"
+        fi
+
         # Copy libraries
         mkdir -p "$package_soc_dir/lib"
         
-        # First try to copy from install directory (contains all libraries)
+        # Copy shared libraries from build directory (RKNN/RGA)
+        for lib in "$build_dir"/*.so*; do
+            if [[ -f "$lib" ]]; then
+                cp "$lib" "$package_soc_dir/lib/"
+            fi
+        done
+        
+        # Copy OpenCV and other libraries from install directory
         local install_lib_dir="install/$soc/lib"
         if [[ -d "$install_lib_dir" ]]; then
             log "Copying libraries from install directory for $soc..."

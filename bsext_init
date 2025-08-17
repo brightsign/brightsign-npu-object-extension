@@ -19,6 +19,15 @@ PIDFILE="/var/run/${DAEMON_NAME}.pid"
 # defaults -- these can be overridden by the registry
 DISABLE_AUTO_START=false
 
+# Helper function to safely call registry command
+safe_registry() {
+    if command -v registry >/dev/null 2>&1; then
+        registry "$@" 2>/dev/null || echo ""
+    else
+        echo ""
+    fi
+}
+
 # Common setup function to determine SOC model and video device
 get_soc_name() {
     # figure out the SOC model -- default to RK3588
@@ -42,11 +51,24 @@ get_soc_name() {
             SOC_NAME="RK3568"
         fi
     else
-        echo "❌ ERROR: Unable to determine SOC model - system not supported"
-        echo "💡 Resolution: This extension requires a Rockchip-based BrightSign player"
-        echo "   Supported models: XT-5 series (RK3588), LS-5 series (RK3568), Firebird (RK3576)"
-        echo "   Current system may not be compatible"
-        exit 1
+        # Check if we're in development mode or have an override
+        if [[ "${BSEXT_DEV_MODE,,}" =~ ^(true|yes|1|on)$ ]] || [ -f "${SCRIPT_PATH}/.dev-mode" ]; then
+            # In development mode, check for SOC override or use default
+            if [ -n "${BSEXT_DEV_SOC}" ]; then
+                SOC_NAME="${BSEXT_DEV_SOC}"
+                echo "🔧 DEV: Using SOC override: ${SOC_NAME}" >&2
+            else
+                SOC_NAME="RK3588"  # Default for development
+                echo "🔧 DEV: Using default SOC for development: ${SOC_NAME}" >&2
+            fi
+        else
+            echo "❌ ERROR: Unable to determine SOC model - system not supported" >&2
+            echo "💡 Resolution: This extension requires a Rockchip-based BrightSign player" >&2
+            echo "   Supported models: XT-5 series (RK3588), LS-5 series (RK3568), Firebird (RK3576)" >&2
+            echo "   Current system may not be compatible" >&2
+            echo "   For development: export BSEXT_DEV_MODE=true" >&2
+            exit 1
+        fi
     fi
 
     # Return the SOC model
@@ -65,7 +87,7 @@ get_video_device() {
 
     # check registry for video device
     # allows user to override the default video device
-    reg_video_device=$(registry extension ${DAEMON_NAME}-video-device)
+    reg_video_device=$(safe_registry extension ${DAEMON_NAME}-video-device)
     if [ -n "${reg_video_device}" ]; then
         VID_DEVID=${reg_video_device}
     fi
@@ -83,7 +105,7 @@ get_model_path() {
     
     # check registry for model path
     # allows user to override the default model path
-    reg_model_path=$(registry extension ${DAEMON_NAME}-model-path)
+    reg_model_path=$(safe_registry extension ${DAEMON_NAME}-model-path)
     if [ -n "${reg_model_path}" ]; then
         MODEL_PATH=${reg_model_path}
     fi
