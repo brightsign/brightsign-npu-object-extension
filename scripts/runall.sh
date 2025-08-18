@@ -179,9 +179,7 @@ clean_build_artifacts() {
     # List of directories and files to clean
     local clean_items=(
         "build_*"
-        "install/RK3588/*"
-        "install/RK3568/*"
-        "install/RK3576/*"
+        "install"
         "objdet-*.zip"
         "yolo-*.zip"
     )
@@ -193,14 +191,6 @@ clean_build_artifacts() {
             log "  Removing: $item"
             rm -rf $item 2>/dev/null || true
             cleaned_items=$((cleaned_items + 1))
-        fi
-    done
-    
-    # Clean install directories but keep the directory structure
-    for soc in RK3588 RK3568 RK3576; do
-        if [ -d "install/$soc" ]; then
-            log "  Cleaning install/$soc contents..."
-            find "install/$soc" -mindepth 1 -delete 2>/dev/null || true
         fi
     done
     
