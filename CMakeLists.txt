@@ -203,12 +203,14 @@ add_custom_command(TARGET object_detection_demo POST_BUILD
 set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install/${SOC_DIR})
 install(TARGETS object_detection_demo DESTINATION ./)
 
-# Install the image stream server binary from the copied location
-install(FILES ${CMAKE_BINARY_DIR}/image-stream-server
-        DESTINATION ./
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                   GROUP_READ GROUP_EXECUTE
-                   WORLD_READ WORLD_EXECUTE)
+# Install the image stream server binary from the copied location (if it exists)
+if(EXISTS ${CMAKE_BINARY_DIR}/image-stream-server)
+    install(FILES ${CMAKE_BINARY_DIR}/image-stream-server
+            DESTINATION ./
+            PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                       GROUP_READ GROUP_EXECUTE
+                       WORLD_READ WORLD_EXECUTE)
+endif()
 
 # Use FILE(COPY) which preserves the actual files rather than symlinks
 install(CODE "
