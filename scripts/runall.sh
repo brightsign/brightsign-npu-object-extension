@@ -382,15 +382,21 @@ main() {
         if [[ "$SKIP_SETUP" == true ]]; then
             log "Skipping setup (--skip-setup flag)"
         else
-            step_header "1/6" "Setup Environment" "5-10 minutes"
-            
-            if [[ "$AUTO_MODE" == true ]]; then
-                ./setup -y || error "Setup failed"
+            # Check if setup is already completed
+            if [[ -d "./toolkit" && -f "./include/rknn_api.h" ]]; then
+                log "Setup already completed (toolkit and headers found)"
+                log "Skipping setup step (already completed)"
             else
-                ./setup || error "Setup failed"
+                step_header "1/6" "Setup Environment" "5-10 minutes"
+                
+                if [[ "$AUTO_MODE" == true ]]; then
+                    ./setup -y || error "Setup failed"
+                else
+                    ./setup || error "Setup failed"
+                fi
+                
+                step_footer "Setup"
             fi
-            
-            step_footer "Setup"
         fi
     fi
     
@@ -400,19 +406,25 @@ main() {
         if [[ "$SKIP_MODELS" == true ]]; then
             log "Skipping model compilation (--skip-models flag)"
         else
-            step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
-            
-            if [[ "$VERBOSE" == true ]]; then
-                log "Running compile-models in verbose mode..."
-                ./compile-models || error "Model compilation failed"
+            # Check if models are already compiled
+            if [[ -d "./install/RK3588/model" && -f "./install/RK3588/model/yolox.rknn" ]]; then
+                log "Models already compiled (found in install directories)"
+                log "Skipping model compilation step (already completed)"
             else
-                log "Running compile-models in quiet mode..."
-                if ! ./compile-models --quiet; then
-                    error "Model compilation failed. Try running with --verbose for more details."
+                step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
+                
+                if [[ "$VERBOSE" == true ]]; then
+                    log "Running compile-models in verbose mode..."
+                    ./compile-models || error "Model compilation failed"
+                else
+                    log "Running compile-models in quiet mode..."
+                    if ! ./compile-models --quiet; then
+                        error "Model compilation failed. Try running with --verbose for more details."
+                    fi
                 fi
+                
+                step_footer "Model compilation"
             fi
-            
-            step_footer "Model compilation"
         fi
     fi
     
@@ -422,20 +434,27 @@ main() {
         if [[ "$SKIP_SDK_BUILD" == true ]]; then
             log "Skipping SDK build (--skip-sdk-build flag)"
         else
-            step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
-            
-            log "This is the longest step. Building BrightSign OS SDK..."
-            log "The build will download ~20GB and compile the SDK"
-            
-            if [[ "$VERBOSE" == true ]]; then
-                ./build --extract-sdk || error "SDK build failed"
+            # Check if SDK installer already exists
+            SDK_INSTALLER=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
+            if [[ -n "$SDK_INSTALLER" ]]; then
+                log "SDK installer already exists: $SDK_INSTALLER"
+                log "Skipping SDK build step (already completed)"
             else
-                if ! ./build --extract-sdk > /dev/null 2>&1; then
-                    error "SDK build failed"
+                step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
+                
+                log "This is the longest step. Building BrightSign OS SDK..."
+                log "The build will download ~20GB and compile the SDK"
+                
+                if [[ "$VERBOSE" == true ]]; then
+                    ./build --extract-sdk || error "SDK build failed"
+                else
+                    if ! ./build --extract-sdk > /dev/null 2>&1; then
+                        error "SDK build failed"
+                    fi
                 fi
+                
+                step_footer "SDK build"
             fi
-            
-            step_footer "SDK build"
         fi
     fi
     
@@ -445,19 +464,25 @@ main() {
         if [[ "$SKIP_SDK_INSTALL" == true ]]; then
             log "Skipping SDK installation (--skip-sdk-install flag)"
         else
-            step_header "4/6" "Install SDK" "1 minute"
-            
-            # Find the SDK installer
-            SDK_INSTALLER=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
-            
-            if [[ -z "$SDK_INSTALLER" ]]; then
-                error "SDK installer not found. Please run build step first."
+            # Check if SDK is already installed
+            if [[ -d "./sdk" && -f "./sdk/environment-setup-aarch64-oe-linux" ]]; then
+                log "SDK already installed in ./sdk directory"
+                log "Skipping SDK installation step (already completed)"
+            else
+                step_header "4/6" "Install SDK" "1 minute"
+                
+                # Find the SDK installer
+                SDK_INSTALLER=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
+                
+                if [[ -z "$SDK_INSTALLER" ]]; then
+                    error "SDK installer not found. Please run build step first."
+                fi
+                
+                log "Installing SDK from $SDK_INSTALLER..."
+                ./"$SDK_INSTALLER" -d ./sdk -y || error "SDK installation failed"
+                
+                step_footer "SDK installation"
             fi
-            
-            log "Installing SDK from $SDK_INSTALLER..."
-            ./"$SDK_INSTALLER" -d ./sdk -y || error "SDK installation failed"
-            
-            step_footer "SDK installation"
         fi
     fi
     
