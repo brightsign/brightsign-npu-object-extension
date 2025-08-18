@@ -192,25 +192,39 @@ target_link_libraries(object_detection_demo
 
 # Convert TARGET_SOC to uppercase for SOC_DIR
 string(TOUPPER ${TARGET_SOC} SOC_DIR)
+
+# Build image-stream-server
+set(IMAGE_STREAM_SERVER_DIR ${CMAKE_BINARY_DIR}/bs-image-stream-server)
+set(IMAGE_STREAM_SERVER_BINARY ${IMAGE_STREAM_SERVER_DIR}/cmd/image-stream-server-arm64)
+
+add_custom_target(build_image_stream_server
+    COMMAND ${CMAKE_COMMAND} -E echo "Cloning and building bs-image-stream-server..."
+    COMMAND bash -c "set -e && if [ ! -d '${IMAGE_STREAM_SERVER_DIR}' ]; then echo 'Cloning bs-image-stream-server...' && git clone git@github.com:brightsign/bs-image-stream-server.git '${IMAGE_STREAM_SERVER_DIR}'; else echo 'Repository already exists, updating...' && cd '${IMAGE_STREAM_SERVER_DIR}' && git pull origin main || true; fi && echo 'Building image stream server...' && cd '${IMAGE_STREAM_SERVER_DIR}' && echo 'Current directory:' && pwd && make build-arm64 && if [ -f '${IMAGE_STREAM_SERVER_BINARY}' ]; then echo 'Build completed successfully, copying binary...' && cp '${IMAGE_STREAM_SERVER_BINARY}' '${CMAKE_BINARY_DIR}/image-stream-server'; else echo 'Build failed - binary not found at ${IMAGE_STREAM_SERVER_BINARY}' && exit 1; fi"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Cloning and building bs-image-stream-server"
+)
+
 # Custom command to copy .so files to the build directory
 add_custom_command(TARGET object_detection_demo POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy ${RKNN_RT_LIB} $<TARGET_FILE_DIR:object_detection_demo>
   COMMAND ${CMAKE_COMMAND} -E copy ${RGA_LIB} $<TARGET_FILE_DIR:object_detection_demo>
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/install/${SOC_DIR}/model $<TARGET_FILE_DIR:object_detection_demo>/model
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/image-stream-server $<TARGET_FILE_DIR:object_detection_demo>/image-stream-server
 )
+
+# Make object_detection_demo depend on image-stream-server build
+add_dependencies(object_detection_demo build_image_stream_server)
 
 # install target and libraries
 set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install/${SOC_DIR})
 install(TARGETS object_detection_demo DESTINATION ./)
 
-# Install the image stream server binary from the copied location (if it exists)
-if(EXISTS ${CMAKE_BINARY_DIR}/image-stream-server)
-    install(FILES ${CMAKE_BINARY_DIR}/image-stream-server
-            DESTINATION ./
-            PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                       GROUP_READ GROUP_EXECUTE
-                       WORLD_READ WORLD_EXECUTE)
-endif()
+# Install the image stream server binary
+install(FILES ${CMAKE_BINARY_DIR}/image-stream-server
+        DESTINATION ./
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                   GROUP_READ GROUP_EXECUTE
+                   WORLD_READ WORLD_EXECUTE)
 
 # Use FILE(COPY) which preserves the actual files rather than symlinks
 install(CODE "
