@@ -29,6 +29,7 @@ SKIP_SDK_INSTALL=false
 SKIP_APPS=false
 SKIP_PACKAGE=false
 VERBOSE=false
+CLEAN_BUILD=false
 
 # Track timing
 START_TIME=$(date +%s)
@@ -54,6 +55,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -auto, --auto          Run all steps without prompting for confirmation"
+    echo "  --clean                Clean build artifacts before starting build"
     echo "  --skip-arch-check      Skip x86_64 architecture check (for testing)"
     echo "  --skip-setup           Skip setup step (if already done)"
     echo "  --skip-models          Skip model compilation (if already done)"
@@ -69,6 +71,7 @@ usage() {
     echo "Examples:"
     echo "  $0                     # Run all steps interactively"
     echo "  $0 -auto               # Run all steps automatically"
+    echo "  $0 --clean --auto      # Clean and run all steps automatically"
     echo "  $0 --skip-setup        # Skip setup if already done"
     echo "  $0 --from-step 5       # Start from building apps"
     echo "  $0 --to-step 4         # Stop after SDK install"
@@ -81,6 +84,7 @@ TO_STEP=6
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -auto|--auto) AUTO_MODE=true; shift ;;
+        --clean) CLEAN_BUILD=true; shift ;;
         --skip-arch-check) SKIP_ARCH_CHECK=true; shift ;;
         --skip-setup) SKIP_SETUP=true; shift ;;
         --skip-models) SKIP_MODELS=true; shift ;;
@@ -166,6 +170,47 @@ check_docker_running() {
     if ! docker info >/dev/null 2>&1; then
         error "Docker is not running. Please start Docker and try again."
     fi
+}
+
+# Function to clean build artifacts
+clean_build_artifacts() {
+    log "Cleaning build artifacts..."
+    
+    # List of directories and files to clean
+    local clean_items=(
+        "build_*"
+        "install/RK3588/*"
+        "install/RK3568/*"
+        "install/RK3576/*"
+        "objdet-*.zip"
+        "yolo-*.zip"
+    )
+    
+    local cleaned_items=0
+    
+    for item in "${clean_items[@]}"; do
+        if ls $item >/dev/null 2>&1; then
+            log "  Removing: $item"
+            rm -rf $item 2>/dev/null || true
+            cleaned_items=$((cleaned_items + 1))
+        fi
+    done
+    
+    # Clean install directories but keep the directory structure
+    for soc in RK3588 RK3568 RK3576; do
+        if [ -d "install/$soc" ]; then
+            log "  Cleaning install/$soc contents..."
+            find "install/$soc" -mindepth 1 -delete 2>/dev/null || true
+        fi
+    done
+    
+    if [ $cleaned_items -gt 0 ]; then
+        success "Cleaned $cleaned_items types of build artifacts"
+    else
+        log "No build artifacts found to clean"
+    fi
+    
+    echo ""
 }
 
 step_header() {
@@ -326,6 +371,11 @@ main() {
     fi
     
     check_prerequisites
+    
+    # Clean build artifacts if requested
+    if [[ "$CLEAN_BUILD" == true ]]; then
+        clean_build_artifacts
+    fi
     
     CURRENT_STEP=0
     
