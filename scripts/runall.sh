@@ -180,6 +180,7 @@ clean_build_artifacts() {
     local clean_items=(
         "build_*"
         "install"
+        "sdk"
         "objdet-*.zip"
         "yolo-*.zip"
     )
