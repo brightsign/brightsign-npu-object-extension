@@ -199,7 +199,10 @@ set(IMAGE_STREAM_SERVER_BINARY ${IMAGE_STREAM_SERVER_DIR}/cmd/image-stream-serve
 
 add_custom_target(build_image_stream_server
     COMMAND ${CMAKE_COMMAND} -E echo "Cloning and building bs-image-stream-server..."
-    COMMAND bash -c "set -e && if [ ! -d '${IMAGE_STREAM_SERVER_DIR}' ]; then echo 'Cloning bs-image-stream-server...' && git clone git@github.com:brightsign/bs-image-stream-server.git '${IMAGE_STREAM_SERVER_DIR}'; else echo 'Repository already exists, updating...' && cd '${IMAGE_STREAM_SERVER_DIR}' && git pull origin main || true; fi && echo 'Building image stream server...' && cd '${IMAGE_STREAM_SERVER_DIR}' && echo 'Current directory:' && pwd && make build-arm64 && if [ -f '${IMAGE_STREAM_SERVER_BINARY}' ]; then echo 'Build completed successfully, copying binary...' && cp '${IMAGE_STREAM_SERVER_BINARY}' '${CMAKE_BINARY_DIR}/image-stream-server'; else echo 'Build failed - binary not found at ${IMAGE_STREAM_SERVER_BINARY}' && exit 1; fi"
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/build-image-stream-server.sh 
+            ${IMAGE_STREAM_SERVER_DIR} 
+            ${IMAGE_STREAM_SERVER_BINARY} 
+            ${CMAKE_BINARY_DIR}/image-stream-server
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Cloning and building bs-image-stream-server"
 )
