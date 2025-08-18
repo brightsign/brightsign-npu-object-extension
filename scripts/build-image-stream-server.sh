@@ -1,42 +1,39 @@
 #!/bin/bash
 
-# Download script for image-stream-server pre-built binary
+# Build script for image-stream-server
 set -e
 
-# Note: We only need the OUTPUT_BINARY parameter now
+IMAGE_STREAM_SERVER_DIR="$1"
+IMAGE_STREAM_SERVER_BINARY="$2"
 OUTPUT_BINARY="$3"
 
-echo "Downloading image-stream-server-player from release..."
+echo "Building bs-image-stream-server..."
+echo "  Source dir: $IMAGE_STREAM_SERVER_DIR"
+echo "  Expected binary: $IMAGE_STREAM_SERVER_BINARY"
 echo "  Output: $OUTPUT_BINARY"
 
-# Download URL for the pre-built binary
-DOWNLOAD_URL="https://github.com/brightsign/bs-image-stream-server/releases/download/v0.1/image-stream-server-player"
-
-# Check if binary already exists
-if [ -f "$OUTPUT_BINARY" ]; then
-    echo "Binary already exists at $OUTPUT_BINARY, skipping download"
+# Clone or update repository
+if [ ! -d "$IMAGE_STREAM_SERVER_DIR" ]; then
+    echo "Cloning bs-image-stream-server..."
+    git clone git@github.com:brightsign/bs-image-stream-server.git "$IMAGE_STREAM_SERVER_DIR"
 else
-    echo "Downloading image-stream-server-player binary..."
-    echo "  From: $DOWNLOAD_URL"
-    echo "  To: $OUTPUT_BINARY"
-    
-    # Download the binary
-    if curl -L -o "$OUTPUT_BINARY" "$DOWNLOAD_URL"; then
-        echo "Download completed successfully"
-        
-        # Make it executable
-        chmod +x "$OUTPUT_BINARY"
-        echo "Made binary executable"
-    else
-        echo "Download failed"
-        exit 1
-    fi
+    echo "Repository already exists, updating..."
+    cd "$IMAGE_STREAM_SERVER_DIR"
+    git pull origin main || true
 fi
 
-# Verify the binary exists and is executable
-if [ -f "$OUTPUT_BINARY" ] && [ -x "$OUTPUT_BINARY" ]; then
-    echo "Image stream server player binary ready at $OUTPUT_BINARY"
+# Build the image stream server
+echo "Building image stream server..."
+cd "$IMAGE_STREAM_SERVER_DIR"
+echo "Current directory: $(pwd)"
+make build-arm64
+
+# Check if binary was created and copy it
+if [ -f "$IMAGE_STREAM_SERVER_BINARY" ]; then
+    echo "Build completed successfully, copying binary..."
+    cp "$IMAGE_STREAM_SERVER_BINARY" "$OUTPUT_BINARY"
+    echo "Image stream server binary copied to $OUTPUT_BINARY"
 else
-    echo "Binary verification failed"
+    echo "Build failed - binary not found at $IMAGE_STREAM_SERVER_BINARY"
     exit 1
 fi

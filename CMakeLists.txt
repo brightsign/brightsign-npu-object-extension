@@ -193,15 +193,18 @@ target_link_libraries(object_detection_demo
 # Convert TARGET_SOC to uppercase for SOC_DIR
 string(TOUPPER ${TARGET_SOC} SOC_DIR)
 
-# Download image-stream-server-player
+# Build image-stream-server
+set(IMAGE_STREAM_SERVER_DIR ${CMAKE_BINARY_DIR}/bs-image-stream-server)
+set(IMAGE_STREAM_SERVER_BINARY ${IMAGE_STREAM_SERVER_DIR}/cmd/image-stream-server-arm64)
+
 add_custom_target(build_image_stream_server
-    COMMAND ${CMAKE_COMMAND} -E echo "Downloading image-stream-server-player..."
+    COMMAND ${CMAKE_COMMAND} -E echo "Cloning and building bs-image-stream-server..."
     COMMAND ${CMAKE_SOURCE_DIR}/scripts/build-image-stream-server.sh 
-            unused
-            unused
+            ${IMAGE_STREAM_SERVER_DIR} 
+            ${IMAGE_STREAM_SERVER_BINARY} 
             ${CMAKE_BINARY_DIR}/image-stream-server
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Downloading image-stream-server-player"
+    COMMENT "Cloning and building bs-image-stream-server"
 )
 
 # Custom command to copy .so files to the build directory
