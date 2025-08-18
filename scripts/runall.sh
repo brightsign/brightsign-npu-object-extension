@@ -407,7 +407,7 @@ main() {
             log "Skipping model compilation (--skip-models flag)"
         else
             # Check if models are already compiled
-            if [[ -d "./install/RK3588/model" && -f "./install/RK3588/model/yolox.rknn" ]]; then
+            if [[ -d "./install/RK3588/model" && -f "./install/RK3588/model/yolox_s.rknn" ]]; then
                 log "Models already compiled (found in install directories)"
                 log "Skipping model compilation step (already completed)"
             else
