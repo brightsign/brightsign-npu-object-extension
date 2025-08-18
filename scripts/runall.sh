@@ -30,6 +30,7 @@ SKIP_APPS=false
 SKIP_PACKAGE=false
 VERBOSE=false
 CLEAN_BUILD=false
+CLEAN_ONLY=false
 
 # Track timing
 START_TIME=$(date +%s)
@@ -56,6 +57,7 @@ usage() {
     echo "Options:"
     echo "  -auto, --auto          Run all steps without prompting for confirmation"
     echo "  --clean                Clean build artifacts before starting build"
+    echo "  --clean-only           Clean build artifacts and exit (no building)"
     echo "  --skip-arch-check      Skip x86_64 architecture check (for testing)"
     echo "  --skip-setup           Skip setup step (if already done)"
     echo "  --skip-models          Skip model compilation (if already done)"
@@ -72,6 +74,7 @@ usage() {
     echo "  $0                     # Run all steps interactively"
     echo "  $0 -auto               # Run all steps automatically"
     echo "  $0 --clean --auto      # Clean and run all steps automatically"
+    echo "  $0 --clean-only        # Just clean build artifacts"
     echo "  $0 --skip-setup        # Skip setup if already done"
     echo "  $0 --from-step 5       # Start from building apps"
     echo "  $0 --to-step 4         # Stop after SDK install"
@@ -85,6 +88,7 @@ while [[ "$#" -gt 0 ]]; do
     case $1 in
         -auto|--auto) AUTO_MODE=true; shift ;;
         --clean) CLEAN_BUILD=true; shift ;;
+        --clean-only) CLEAN_ONLY=true; shift ;;
         --skip-arch-check) SKIP_ARCH_CHECK=true; shift ;;
         --skip-setup) SKIP_SETUP=true; shift ;;
         --skip-models) SKIP_MODELS=true; shift ;;
@@ -348,6 +352,17 @@ main() {
     
     log "Project root: $PROJECT_ROOT"
     echo ""
+    
+    # Handle clean-only mode early
+    if [[ "$CLEAN_ONLY" == true ]]; then
+        log "Clean-only mode: Will clean build artifacts and exit"
+        echo ""
+        check_prerequisites
+        clean_build_artifacts
+        log "Clean completed. Exiting (--clean-only mode)."
+        exit 0
+    fi
+    
     echo "This will run all build steps from the Quick Start guide."
     echo "Estimated total time: 60-90 minutes (first run)"
     echo ""
@@ -372,7 +387,7 @@ main() {
     
     check_prerequisites
     
-    # Clean build artifacts if requested
+    # Clean build artifacts if requested (but not clean-only, that's handled earlier)
     if [[ "$CLEAN_BUILD" == true ]]; then
         clean_build_artifacts
     fi
