@@ -57,6 +57,24 @@ In a typical development workflow, steps 1 - 4 (setup, model compilation, build 
 ./scripts/runall.sh --help
 ```
 
+### Cleaning Build Artifacts
+
+To remove all generated build artifacts and start fresh:
+
+```bash
+# Clean all build artifacts (requires confirmation)
+./scripts/runall.sh --clean
+```
+
+This will remove:
+- All `build_*` directories (build_xt5, build_ls5, build_firebird)
+- SDK installer files (`brightsign-x86*.sh`)
+- The `sdk/` directory
+- The `toolkit/` directory  
+- All extension packages (`object-*.zip`)
+
+**Note:** The clean operation always requires manual confirmation and cannot be bypassed with `--auto` mode for safety.
+
 **Key Features:**
 
 - **Progress tracking** with time estimates
@@ -64,6 +82,7 @@ In a typical development workflow, steps 1 - 4 (setup, model compilation, build 
 - **Partial execution** (start/stop at specific steps)
 - **Verbose mode** for detailed output
 - **Auto mode** for CI/CD pipelines
+- **Artifact cleanup** with mandatory confirmation
 - **Error handling** with clear failure messages
 
 **Time estimates:** Setup (5-10 min) → Models (3-5 min) → SDK Build (30-45 min) → SDK Install (1 min) → Apps (3-8 min) → Package (1 min)

@@ -29,6 +29,7 @@ SKIP_SDK_INSTALL=false
 SKIP_APPS=false
 SKIP_PACKAGE=false
 VERBOSE=false
+CLEAN_MODE=false
 
 # Track timing
 START_TIME=$(date +%s)
@@ -61,6 +62,7 @@ usage() {
     echo "  --skip-sdk-install     Skip SDK installation (if already done)"
     echo "  --skip-apps            Skip application build"
     echo "  --skip-package         Skip packaging step"
+    echo "  --clean                Clean all generated artifacts (interactive only)"
     echo "  --from-step N          Start from step N (1-6)"
     echo "  --to-step N            Stop after step N (1-6)"
     echo "  --verbose              Show detailed output"
@@ -88,6 +90,7 @@ while [[ "$#" -gt 0 ]]; do
         --skip-sdk-install) SKIP_SDK_INSTALL=true; shift ;;
         --skip-apps) SKIP_APPS=true; shift ;;
         --skip-package) SKIP_PACKAGE=true; shift ;;
+        --clean) CLEAN_MODE=true; shift ;;
         --from-step) FROM_STEP="$2"; shift 2 ;;
         --to-step) TO_STEP="$2"; shift 2 ;;
         --verbose) VERBOSE=true; shift ;;
@@ -223,6 +226,85 @@ print_summary() {
     echo "3. Extension will auto-start with USB camera"
 }
 
+clean_artifacts() {
+    echo ""
+    echo -e "${BOLD}${YELLOW}════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${BOLD}${YELLOW}  CLEAN BUILD ARTIFACTS${NC}"
+    echo -e "${BOLD}${YELLOW}════════════════════════════════════════════════════════════════════${NC}"
+    echo ""
+    
+    echo "The following artifacts will be removed:"
+    echo ""
+    
+    # Check and list build directories
+    local build_dirs=$(ls -d build_* 2>/dev/null)
+    if [[ -n "$build_dirs" ]]; then
+        echo "  Build directories:"
+        for dir in $build_dirs; do
+            echo "    - $dir/"
+        done
+    fi
+    
+    # Check for SDK installer
+    local sdk_installers=$(ls brightsign-x86*.sh 2>/dev/null)
+    if [[ -n "$sdk_installers" ]]; then
+        echo "  SDK installers:"
+        for file in $sdk_installers; do
+            echo "    - $file"
+        done
+    fi
+    
+    # Check for sdk directory
+    if [[ -d "./sdk" ]]; then
+        echo "  - ./sdk/ directory"
+    fi
+    
+    # Check for toolkit directory
+    if [[ -d "./toolkit" ]]; then
+        echo "  - ./toolkit/ directory"
+    fi
+    
+    # Check for zip files
+    local zip_files=$(ls object-*.zip 2>/dev/null)
+    if [[ -n "$zip_files" ]]; then
+        echo "  Extension packages:"
+        for file in $zip_files; do
+            echo "    - $file"
+        done
+    fi
+    
+    echo ""
+    echo -e "${BOLD}${RED}⚠️  This action cannot be undone!${NC}"
+    echo ""
+    
+    # Mandatory confirmation - no bypass
+    read -p "Are you sure you want to delete all these artifacts? (y/n): " -n 1 -r
+    echo
+    
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        log "Cleaning artifacts..."
+        
+        # Remove build directories
+        rm -rf ./build_* 2>/dev/null
+        
+        # Remove SDK installers
+        rm -f brightsign-x86*.sh 2>/dev/null
+        
+        # Remove sdk directory
+        rm -rf ./sdk 2>/dev/null
+        
+        # Remove toolkit directory
+        rm -rf ./toolkit 2>/dev/null
+        
+        # Remove zip files
+        rm -f object-*.zip 2>/dev/null
+        
+        success "Build artifacts cleaned successfully"
+    else
+        log "Clean operation cancelled"
+    fi
+}
+
 check_prerequisites() {
     log "Checking prerequisites..."
     
@@ -323,6 +405,15 @@ main() {
             echo "Build cancelled."
             exit 0
         fi
+    fi
+    
+    # Handle clean mode
+    if [[ "$CLEAN_MODE" == true ]]; then
+        if [[ "$AUTO_MODE" == true ]]; then
+            error "Clean mode cannot be used with --auto flag (confirmation required)"
+        fi
+        clean_artifacts
+        exit 0
     fi
     
     check_prerequisites
