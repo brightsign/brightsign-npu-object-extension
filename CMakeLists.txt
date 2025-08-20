@@ -192,18 +192,37 @@ target_link_libraries(object_detection_demo
 
 # Convert TARGET_SOC to uppercase for SOC_DIR
 string(TOUPPER ${TARGET_SOC} SOC_DIR)
+
+# Build image-stream-server
+set(IMAGE_STREAM_SERVER_DIR ${CMAKE_BINARY_DIR}/bs-image-stream-server)
+set(IMAGE_STREAM_SERVER_BINARY ${IMAGE_STREAM_SERVER_DIR}/cmd/image-stream-server-arm64)
+
+add_custom_target(build_image_stream_server
+    COMMAND ${CMAKE_COMMAND} -E echo "Cloning and building bs-image-stream-server..."
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/build-image-stream-server.sh 
+            ${IMAGE_STREAM_SERVER_DIR} 
+            ${IMAGE_STREAM_SERVER_BINARY} 
+            ${CMAKE_BINARY_DIR}/image-stream-server
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Cloning and building bs-image-stream-server"
+)
+
 # Custom command to copy .so files to the build directory
 add_custom_command(TARGET object_detection_demo POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy ${RKNN_RT_LIB} $<TARGET_FILE_DIR:object_detection_demo>
   COMMAND ${CMAKE_COMMAND} -E copy ${RGA_LIB} $<TARGET_FILE_DIR:object_detection_demo>
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/install/${SOC_DIR}/model $<TARGET_FILE_DIR:object_detection_demo>/model
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/image-stream-server $<TARGET_FILE_DIR:object_detection_demo>/image-stream-server
 )
+
+# Make object_detection_demo depend on image-stream-server build
+add_dependencies(object_detection_demo build_image_stream_server)
 
 # install target and libraries
 set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install/${SOC_DIR})
 install(TARGETS object_detection_demo DESTINATION ./)
 
-# Install the image stream server binary from the copied location
+# Install the image stream server binary
 install(FILES ${CMAKE_BINARY_DIR}/image-stream-server
         DESTINATION ./
         PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
