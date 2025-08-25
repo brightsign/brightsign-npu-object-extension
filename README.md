@@ -20,6 +20,8 @@ A [simple BrightAuthor:connected presentation](https://github.com/brightsign/sim
 
 This is an **ALPHA** quality release, intended mostly for educational purposes. This model is not tuned for optimum performance and has had only standard testing.  **NOT RECOMMENDED FOR PRODUCTION USE**.
 
+# Building the BSMP Extension
+
 ## 🚀 Quick Start (Complete Automated Workflow)
 
 __Total Time__: 60-90 minutes | __Prerequisites__: Docker, git, x86_64 Linux host
