@@ -16,7 +16,6 @@ It can be installed just like any other BrightSign firmware upgrade:  copy it to
 
 A [simple BrightAuthor:connected presentation](https://github.com/brightsign/simple-object-detection-presentation) demonstrating the gaze detection BSMP is available for demonstration purposes.
 
->>>>>>> b6ec667 (interim commit)
 ## Release Status
 
 This is an **ALPHA** quality release, intended mostly for educational purposes. This model is not tuned for optimum performance and has had only standard testing.  **NOT RECOMMENDED FOR PRODUCTION USE**.
