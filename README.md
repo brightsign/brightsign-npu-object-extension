@@ -14,7 +14,7 @@ It can be installed just like any other BrightSign firmware upgrade:  copy it to
 
 ## Pracical Real-World Example
 
-A [simple BrightAuthor:connected presentation](https://github.com/brightsign/simple-object-detection-presentation) demonstrating the gaze detection BSMP is available for demonstration purposes.
+A [simple BrightAuthor:connected presentation](https://github.com/brightsign/simple-object-detection-presentation) demonstrating the object detection BSMP is available for demonstration purposes.
 
 ## Release Status
 
