@@ -1,9 +1,22 @@
-# BrightSign Object Detection Extension
+# BrightSign Object Detection Extension BSMP
 
-**Automated AI object detection extension for BrightSign Series 5 players using Rockchip NPU acceleration.**
+**Example: Automated AI object detection extension for BrightSign Series 5 players using Rockchip NPU acceleration.**
 
 This project provides a complete, automated build system to create BrightSign extensions that run object detection on the NPU at ~30 FPS with selective class detection and configurable confidence thresholds.
 
+## Use It vs. Build It
+
+If you just want to use this BSMP extension but don't want to build it, you can just download it.
+
+* [cobra-standalone-npu_obj-0.1.0-alpha.bsfw](https://github.com/brightsign/brightsign-npu-object-extension/releases/download/v0.1.0-alpha/cobra-standalone-npu_obj-0.1.0-alpha.bsfw)
+
+It can be installed just like any other BrightSign firmware upgrade:  copy it to an SD card and boot the player with that card inserted.
+
+## Pracical Real-World Example
+
+A [simple BrightAuthor:connected presentation](https://github.com/brightsign/simple-object-detection-presentation) demonstrating the gaze detection BSMP is available for demonstration purposes.
+
+>>>>>>> b6ec667 (interim commit)
 ## Release Status
 
 This is an **ALPHA** quality release, intended mostly for educational purposes. This model is not tuned for optimum performance and has had only standard testing.  **NOT RECOMMENDED FOR PRODUCTION USE**.
@@ -212,7 +225,7 @@ Comprehensive update workflow with policy enforcement, version validation, and a
 # Update extension with full validation
 ./sh/update-extension.sh objdet-ext-20250201-123456.zip
 
-# Test update compatibility without executing  
+# Test update compatibility without executing
 ./sh/update-extension.sh --dry-run objdet-ext-20250201-123456.zip
 
 # Force update ignoring policy restrictions
@@ -257,7 +270,7 @@ Built-in configuration management with automatic preservation:
 # Using bsext_init for configuration management
 ./bsext_init backup                    # Auto-generated backup name
 ./bsext_init backup my_backup_name     # Custom backup name
-./bsext_init restore                   # Restore from latest backup  
+./bsext_init restore                   # Restore from latest backup
 ./bsext_init restore my_backup_name    # Restore from specific backup
 ./bsext_init list-backups              # List available backups
 ```
@@ -326,7 +339,7 @@ Enhanced development experience with comprehensive tooling:
 # Enhanced packaging with validation
 ./package --verify                     # Run full validation after packaging
 
-# Validate manifest during development  
+# Validate manifest during development
 ./sh/validate-manifest.sh --verbose manifest-config.json
 
 # Test update process in development
@@ -432,14 +445,14 @@ Benefits:
 ```bash
 # Core build system
 ./setup --help                    # Setup and environment options
-./compile-models --help           # Model compilation options  
+./compile-models --help           # Model compilation options
 ./build --help                    # SDK build options
 ./build-apps --help               # Application build options
 ./package --help                  # Packaging options
 
 # Phase 3 management tools
 ./sh/update-extension.sh --help   # Update orchestration options
-./sh/rollback-extension.sh --help # Rollback management options  
+./sh/rollback-extension.sh --help # Rollback management options
 ./sh/validate-manifest.sh --help  # Manifest validation options
 ./bsext_init --help               # Extension control and configuration
 ```
