@@ -17,7 +17,7 @@ TARGET_PLATFORM=""
 declare -A PLATFORMS=(
     ["XT5"]="RK3588"
     ["LS5"]="RK3568"
-    ["Firebird"]="RK3568"
+    ["Firebird"]="RK3576"
 )
 
 # Note: Firebird/RK3576 support is not complete yet, using RK3568 as fallback

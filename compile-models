@@ -23,10 +23,11 @@ VERBOSE=false
 BUILD_CONTAINER=false
 
 # Platform configurations
-declare -A PLATFORMS=(
-    ["XT5"]="rk3588"
-    ["LS5"]="rk3568"
-    ["Firebird"]="rk3576"
+PLATFORMS=("XT5" "LS5" "Firebird")
+declare -A SOC_MAP=(
+    [XT5]="rk3588"
+    [LS5]="rk3568"
+    [Firebird]="rk3576"
 )
 
 # Model configurations - YOLOX only
@@ -99,13 +100,13 @@ while [[ $# -gt 0 ]]; do
             ;;
         *)
             if [ -z "$PLATFORM" ]; then
-                if [ -n "${PLATFORMS[$1]}" ]; then
+                if [[ " ${PLATFORMS[@]} " =~ " $1 " ]]; then
                     PLATFORM="$1"
                 elif [ -n "${MODELS[$1]}" ]; then
                     MODEL="$1"
                 else
                     echo "Unknown platform or model: $1"
-                    echo "Valid platforms: ${!PLATFORMS[@]}"
+                    echo "Valid platforms: ${PLATFORMS[@]}"
                     echo "Valid models: ${!MODELS[@]}"
                     exit 1
                 fi
@@ -201,7 +202,7 @@ build_container() {
 compile_model() {
     local platform=$1
     local model_type=$2
-    local soc=${PLATFORMS[$platform]}
+    local soc=${SOC_MAP[$platform]}
     local model_file=${MODELS[$model_type]}
     
     log "Compiling $model_type for $platform (SOC: $soc)..."
@@ -250,8 +251,8 @@ copy_models() {
     
     cd toolkit/rknn_model_zoo
     
-    for platform in "${!PLATFORMS[@]}"; do
-        local soc=${PLATFORMS[$platform]}
+    for platform in "${PLATFORMS[@]}"; do
+        local soc=${SOC_MAP[$platform]}
         local soc_upper=${soc^^}
         
         # Create install directory
@@ -302,12 +303,12 @@ main() {
         done
     elif [ -n "$MODEL" ]; then
         log "Compiling $MODEL for all platforms..."
-        for platform in "${!PLATFORMS[@]}"; do
+        for platform in "${PLATFORMS[@]}"; do
             compile_model "$platform" "$MODEL"
         done
     else
         log "Compiling all models for all platforms..."
-        for platform in "${!PLATFORMS[@]}"; do
+        for platform in "${PLATFORMS[@]}"; do
             for model in "${!MODELS[@]}"; do
                 compile_model "$platform" "$model"
             done
@@ -325,8 +326,8 @@ main() {
     
     echo ""
     echo "Compiled models:"
-    for platform in "${!PLATFORMS[@]}"; do
-        local soc=${PLATFORMS[$platform]}
+    for platform in "${PLATFORMS[@]}"; do
+        local soc=${SOC_MAP[$platform]}
         local soc_upper=${soc^^}
         local install_dir="install/${soc_upper}/model"
         

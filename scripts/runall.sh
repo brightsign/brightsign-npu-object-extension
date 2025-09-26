@@ -400,19 +400,37 @@ main() {
         fi
     fi
     
+    # Platform configurations
+    PLATFORMS=("XT5" "LS5" "Firebird")
+    declare -A SOC_MAP=(
+        [XT5]="RK3588"
+        [LS5]="RK3568"
+        [Firebird]="RK3576"
+    )
     # Step 2: Compile models
     if [[ $FROM_STEP -le 2 && $TO_STEP -ge 2 ]]; then
         CURRENT_STEP=2
         if [[ "$SKIP_MODELS" == true ]]; then
             log "Skipping model compilation (--skip-models flag)"
         else
-            # Check if models are already compiled
-            if [[ -d "./install/RK3588/model" && -f "./install/RK3588/model/yolox_s.rknn" ]]; then
-                log "Models already compiled (found in install directories)"
+            ALL_MODELS_OK=true
+            REFERENCE_MODEL=""
+            for platform in "${PLATFORMS[@]}"; do
+                soc="${SOC_MAP[$platform]}"
+                model_dir="./install/${soc}/model"
+                if [[ -d "$model_dir" && -f "$model_dir/yolox_s.rknn" ]]; then
+                    if [[ -z "$REFERENCE_MODEL" ]]; then
+                        REFERENCE_MODEL="$model_dir"
+                    fi
+                else
+                    ALL_MODELS_OK=false
+                fi
+            done
+            if [[ "$ALL_MODELS_OK" == true && -n "$REFERENCE_MODEL" ]]; then
+                log "Models already compiled (found in all install directories for platforms: ${PLATFORMS[*]})"
                 log "Skipping model compilation step (already completed)"
             else
                 step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
-                
                 if [[ "$VERBOSE" == true ]]; then
                     log "Running compile-models in verbose mode..."
                     ./compile-models || error "Model compilation failed"
@@ -422,7 +440,19 @@ main() {
                         error "Model compilation failed. Try running with --verbose for more details."
                     fi
                 fi
-                
+                # After compilation, ensure all model directories have model files
+                for platform in "${PLATFORMS[@]}"; do
+                    soc="${SOC_MAP[$platform]}"
+                    model_dir="./install/${soc}/model"
+                    if [[ ! -d "$model_dir" ]]; then
+                        log "Creating missing model directory for $platform ($soc)..."
+                        mkdir -p "$model_dir"
+                    fi
+                    if [[ ! -f "$model_dir/yolox_s.rknn" && -n "$REFERENCE_MODEL" ]]; then
+                        log "Copying models to $model_dir from $REFERENCE_MODEL..."
+                        cp -a "$REFERENCE_MODEL"/* "$model_dir/" 2>/dev/null || true
+                    fi
+                done
                 step_footer "Model compilation"
             fi
         fi
