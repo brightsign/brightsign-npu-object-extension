@@ -8,7 +8,7 @@ This project provides a complete, automated build system to create BrightSign ex
 
 If you just want to use this BSMP extension but don't want to build it, you can just download it.
 
-* [cobra-standalone-npu_obj-0.1.0-alpha.bsfw](https://github.com/brightsign/brightsign-npu-object-extension/releases/download/v0.1.0-alpha/cobra-standalone-npu_obj-0.1.0-alpha.bsfw)
+* [cobra-standalone-npu_obj-0.1.1-alpha.bsfw](https://github.com/brightsign/brightsign-npu-object-extension/releases/download/v0.1.1-alpha/cobra-npu_obj-0.1.1-alpha.bsfw)
 
 It can be installed just like any other BrightSign firmware upgrade:  copy it to an SD card and boot the player with that card inserted.
 
