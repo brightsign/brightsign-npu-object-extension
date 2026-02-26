@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "yolo.h"
+#include "yolox.h"
 #include "image_utils.h"
 
 #include <math.h>
@@ -465,236 +465,8 @@ static int process_i8_rv1106(int8_t *input, int32_t zp, float scale, int8_t *unu
 }
 #endif
 
-// Simplified YOLO processing functions (unified tensor format)
-// YoloV8-specific processing functions (9-output structure)
-static int process_yolov8_scale_i8(int8_t *box_input, int32_t box_zp, float box_scale,
-                                   int8_t *cls_input, int32_t cls_zp, float cls_scale,
-                                   int8_t *obj_input, int32_t obj_zp, float obj_scale,
-                                   int grid_h, int grid_w, int stride,
-                                   std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId,
-                                   float threshold)
-{
-    int validCount = 0;
-    int8_t thres_i8 = qnt_f32_to_affine(threshold, obj_zp, obj_scale);
 
-    for (int i = 0; i < grid_h; ++i) {
-        for (int j = 0; j < grid_w; ++j) {
-            int grid_idx = i * grid_w + j;
-            
-            // Get objectness confidence from obj_input [1, 1, H, W]
-            int8_t box_confidence = obj_input[grid_idx];
-            if (box_confidence >= thres_i8) {
-                
-                // Find max class probability from cls_input [1, 80, H, W]
-                int8_t maxClassProbs = cls_input[grid_idx]; // class 0
-                int maxClassId = 0;
-                for (int k = 1; k < OBJ_CLASS_NUM; ++k) {
-                    int8_t prob = cls_input[k * grid_h * grid_w + grid_idx];
-                    if (prob > maxClassProbs) {
-                        maxClassId = k;
-                        maxClassProbs = prob;
-                    }
-                }
-
-                int8_t cls_thres_i8 = qnt_f32_to_affine(threshold, cls_zp, cls_scale);
-                if (maxClassProbs > cls_thres_i8) {
-                    // Get box coordinates from box_input [1, 64, H, W] 
-                    // YoloV8 uses DFL encoding with 16 values per coordinate (64 = 4 * 16)
-                    float box_coords[4] = {0, 0, 0, 0};
-                    const int dfl_len = 16;
-                    
-                    for (int coord = 0; coord < 4; coord++) {
-                        float exp_sum = 0;
-                        float acc_sum = 0;
-                        
-                        for (int d = 0; d < dfl_len; d++) {
-                            int dfl_idx = (coord * dfl_len + d) * grid_h * grid_w + grid_idx;
-                            float exp_val = exp(deqnt_affine_to_f32(box_input[dfl_idx], box_zp, box_scale));
-                            exp_sum += exp_val;
-                            acc_sum += exp_val * d;
-                        }
-                        
-                        box_coords[coord] = (exp_sum > 0) ? (acc_sum / exp_sum) : 0;
-                    }
-                    
-                    // Convert DFL coordinates to absolute coordinates
-                    float box_x = (j + 0.5f - box_coords[0]) * stride;
-                    float box_y = (i + 0.5f - box_coords[1]) * stride;
-                    float box_w = (j + 0.5f + box_coords[2]) * stride - box_x;
-                    float box_h = (i + 0.5f + box_coords[3]) * stride - box_y;
-                    
-                    // Convert to corner coordinates
-                    box_x = box_x - box_w / 2.0f;
-                    box_y = box_y - box_h / 2.0f;
-
-                    // Calculate final confidence score
-                    float obj_score = deqnt_affine_to_f32(box_confidence, obj_zp, obj_scale);
-                    float cls_score = deqnt_affine_to_f32(maxClassProbs, cls_zp, cls_scale);
-                    
-                    objProbs.push_back(obj_score * cls_score);
-                    classId.push_back(maxClassId);
-                    validCount++;
-                    boxes.push_back(box_x);
-                    boxes.push_back(box_y);
-                    boxes.push_back(box_w);
-                    boxes.push_back(box_h);
-                }
-            }
-        }
-    }
-    return validCount;
-}
-
-static int process_yolov8_scale_u8(uint8_t *box_input, int32_t box_zp, float box_scale,
-                                   uint8_t *cls_input, int32_t cls_zp, float cls_scale,
-                                   uint8_t *obj_input, int32_t obj_zp, float obj_scale,
-                                   int grid_h, int grid_w, int stride,
-                                   std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId,
-                                   float threshold)
-{
-    int validCount = 0;
-    uint8_t thres_u8 = qnt_f32_to_affine_u8(threshold, obj_zp, obj_scale);
-
-    for (int i = 0; i < grid_h; ++i) {
-        for (int j = 0; j < grid_w; ++j) {
-            int grid_idx = i * grid_w + j;
-            
-            // Get objectness confidence from obj_input [1, 1, H, W]
-            uint8_t box_confidence = obj_input[grid_idx];
-            if (box_confidence >= thres_u8) {
-                
-                // Find max class probability from cls_input [1, 80, H, W]
-                uint8_t maxClassProbs = cls_input[grid_idx]; // class 0
-                int maxClassId = 0;
-                for (int k = 1; k < OBJ_CLASS_NUM; ++k) {
-                    uint8_t prob = cls_input[k * grid_h * grid_w + grid_idx];
-                    if (prob > maxClassProbs) {
-                        maxClassId = k;
-                        maxClassProbs = prob;
-                    }
-                }
-
-                uint8_t cls_thres_u8 = qnt_f32_to_affine_u8(threshold, cls_zp, cls_scale);
-                if (maxClassProbs > cls_thres_u8) {
-                    // Get box coordinates from box_input [1, 64, H, W] 
-                    // YoloV8 uses DFL encoding with 16 values per coordinate (64 = 4 * 16)
-                    float box_coords[4] = {0, 0, 0, 0};
-                    const int dfl_len = 16;
-                    
-                    for (int coord = 0; coord < 4; coord++) {
-                        float exp_sum = 0;
-                        float acc_sum = 0;
-                        
-                        for (int d = 0; d < dfl_len; d++) {
-                            int dfl_idx = (coord * dfl_len + d) * grid_h * grid_w + grid_idx;
-                            float exp_val = exp(deqnt_affine_u8_to_f32(box_input[dfl_idx], box_zp, box_scale));
-                            exp_sum += exp_val;
-                            acc_sum += exp_val * d;
-                        }
-                        
-                        box_coords[coord] = (exp_sum > 0) ? (acc_sum / exp_sum) : 0;
-                    }
-                    
-                    // Convert DFL coordinates to absolute coordinates
-                    float box_x = (j + 0.5f - box_coords[0]) * stride;
-                    float box_y = (i + 0.5f - box_coords[1]) * stride;
-                    float box_w = (j + 0.5f + box_coords[2]) * stride - box_x;
-                    float box_h = (i + 0.5f + box_coords[3]) * stride - box_y;
-                    
-                    // Convert to corner coordinates
-                    box_x = box_x - box_w / 2.0f;
-                    box_y = box_y - box_h / 2.0f;
-
-                    // Calculate final confidence score
-                    float obj_score = deqnt_affine_u8_to_f32(box_confidence, obj_zp, obj_scale);
-                    float cls_score = deqnt_affine_u8_to_f32(maxClassProbs, cls_zp, cls_scale);
-                    
-                    objProbs.push_back(obj_score * cls_score);
-                    classId.push_back(maxClassId);
-                    validCount++;
-                    boxes.push_back(box_x);
-                    boxes.push_back(box_y);
-                    boxes.push_back(box_w);
-                    boxes.push_back(box_h);
-                }
-            }
-        }
-    }
-    return validCount;
-}
-
-static int process_yolov8_scale_fp32(float *box_input, float *cls_input, float *obj_input,
-                                     int grid_h, int grid_w, int stride,
-                                     std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId,
-                                     float threshold)
-{
-    int validCount = 0;
-
-    for (int i = 0; i < grid_h; i++) {
-        for (int j = 0; j < grid_w; j++) {
-            int grid_idx = i * grid_w + j;
-            
-            // Get objectness confidence from obj_input [1, 1, H, W]
-            float box_confidence = obj_input[grid_idx];
-            if (box_confidence >= threshold) {
-                
-                // Find max class probability from cls_input [1, 80, H, W]
-                float maxClassProbs = cls_input[grid_idx]; // class 0
-                int maxClassId = 0;
-                for (int k = 1; k < OBJ_CLASS_NUM; ++k) {
-                    float prob = cls_input[k * grid_h * grid_w + grid_idx];
-                    if (prob > maxClassProbs) {
-                        maxClassId = k;
-                        maxClassProbs = prob;
-                    }
-                }
-
-                if (maxClassProbs > threshold) {
-                    // Get box coordinates from box_input [1, 64, H, W] 
-                    // YoloV8 uses DFL encoding with 16 values per coordinate (64 = 4 * 16)
-                    float box_coords[4] = {0, 0, 0, 0};
-                    const int dfl_len = 16;
-                    
-                    for (int coord = 0; coord < 4; coord++) {
-                        float exp_sum = 0;
-                        float acc_sum = 0;
-                        
-                        for (int d = 0; d < dfl_len; d++) {
-                            int dfl_idx = (coord * dfl_len + d) * grid_h * grid_w + grid_idx;
-                            float exp_val = exp(box_input[dfl_idx]);
-                            exp_sum += exp_val;
-                            acc_sum += exp_val * d;
-                        }
-                        
-                        box_coords[coord] = (exp_sum > 0) ? (acc_sum / exp_sum) : 0;
-                    }
-                    
-                    // Convert DFL coordinates to absolute coordinates
-                    float box_x = (j + 0.5f - box_coords[0]) * stride;
-                    float box_y = (i + 0.5f - box_coords[1]) * stride;
-                    float box_w = (j + 0.5f + box_coords[2]) * stride - box_x;
-                    float box_h = (i + 0.5f + box_coords[3]) * stride - box_y;
-                    
-                    // Convert to corner coordinates
-                    box_x = box_x - box_w / 2.0f;
-                    box_y = box_y - box_h / 2.0f;
-
-                    // Calculate final confidence score
-                    objProbs.push_back(box_confidence * maxClassProbs);
-                    classId.push_back(maxClassId);
-                    validCount++;
-                    boxes.push_back(box_x);
-                    boxes.push_back(box_y);
-                    boxes.push_back(box_w);
-                    boxes.push_back(box_h);
-                }
-            }
-        }
-    }
-    return validCount;
-}
-
-static int process_simplified_yolo_u8(uint8_t *input, int grid_h, int grid_w, int height, int width, int stride,
+static int process_simplified_yolox_u8(uint8_t *input, int grid_h, int grid_w, int height, int width, int stride,
                                       std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId, 
                                       float threshold, int32_t zp, float scale)
 {
@@ -725,7 +497,7 @@ static int process_simplified_yolo_u8(uint8_t *input, int grid_h, int grid_w, in
                     float box_w = deqnt_affine_u8_to_f32(in_ptr[2 * grid_len], zp, scale);
                     float box_h = deqnt_affine_u8_to_f32(in_ptr[3 * grid_len], zp, scale);
                     
-                    // Simplified YOLO coordinate transformation
+                    // Simplified YOLOX coordinate transformation
                     box_x = (box_x + j) * (float)stride;
                     box_y = (box_y + i) * (float)stride;
                     box_w = exp(box_w) * stride;
@@ -733,7 +505,7 @@ static int process_simplified_yolo_u8(uint8_t *input, int grid_h, int grid_w, in
                     box_x -= (box_w / 2.0);
                     box_y -= (box_h / 2.0);
 
-                    // Simplified YOLO scoring: objectness * class_score
+                    // Simplified YOLOX scoring: objectness * class_score
                     objProbs.push_back(deqnt_affine_u8_to_f32(maxClassProbs, zp, scale) * 
                                      deqnt_affine_u8_to_f32(box_confidence, zp, scale));
                     classId.push_back(maxClassId);
@@ -749,7 +521,7 @@ static int process_simplified_yolo_u8(uint8_t *input, int grid_h, int grid_w, in
     return validCount;
 }
 
-static int process_simplified_yolo_i8(int8_t *input, int grid_h, int grid_w, int height, int width, int stride,
+static int process_simplified_yolox_i8(int8_t *input, int grid_h, int grid_w, int height, int width, int stride,
                                       std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId, 
                                       float threshold, int32_t zp, float scale)
 {
@@ -780,7 +552,7 @@ static int process_simplified_yolo_i8(int8_t *input, int grid_h, int grid_w, int
                     float box_w = deqnt_affine_to_f32(in_ptr[2 * grid_len], zp, scale);
                     float box_h = deqnt_affine_to_f32(in_ptr[3 * grid_len], zp, scale);
                     
-                    // Simplified YOLO coordinate transformation
+                    // Simplified YOLOX coordinate transformation
                     box_x = (box_x + j) * (float)stride;
                     box_y = (box_y + i) * (float)stride;
                     box_w = exp(box_w) * stride;
@@ -788,7 +560,7 @@ static int process_simplified_yolo_i8(int8_t *input, int grid_h, int grid_w, int
                     box_x -= (box_w / 2.0);
                     box_y -= (box_h / 2.0);
 
-                    // Simplified YOLO scoring: objectness * class_score
+                    // Simplified YOLOX scoring: objectness * class_score
                     objProbs.push_back(deqnt_affine_to_f32(maxClassProbs, zp, scale) * 
                                      deqnt_affine_to_f32(box_confidence, zp, scale));
                     classId.push_back(maxClassId);
@@ -804,7 +576,7 @@ static int process_simplified_yolo_i8(int8_t *input, int grid_h, int grid_w, int
     return validCount;
 }
 
-static int process_simplified_yolo_fp32(float *input, int grid_h, int grid_w, int height, int width, int stride,
+static int process_simplified_yolox_fp32(float *input, int grid_h, int grid_w, int height, int width, int stride,
                                         std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId, 
                                         float threshold)
 {
@@ -842,7 +614,7 @@ static int process_simplified_yolo_fp32(float *input, int grid_h, int grid_w, in
                 }
                 
                 if (maxClassProbs > threshold) {
-                    // Simplified YOLO scoring: objectness * class_score
+                    // Simplified YOLOX scoring: objectness * class_score
                     objProbs.push_back(maxClassProbs * box_confidence);
                     classId.push_back(maxClassId);
                     validCount++;
@@ -858,11 +630,11 @@ static int process_simplified_yolo_fp32(float *input, int grid_h, int grid_w, in
 }
 
 // Forward declarations for different processing paths
-static int process_standard_yolo_outputs(rknn_app_context_t *app_ctx, void *outputs, 
+static int process_standard_yolox_outputs(rknn_app_context_t *app_ctx, void *outputs, 
                                          std::vector<float> &filterBoxes, std::vector<float> &objProbs, 
                                          std::vector<int> &classId, float conf_threshold);
 
-static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *outputs,
+static int process_simplified_yolox_outputs(rknn_app_context_t *app_ctx, void *outputs,
                                            std::vector<float> &filterBoxes, std::vector<float> &objProbs,
                                            std::vector<int> &classId, float conf_threshold);
 
@@ -877,14 +649,9 @@ int post_process(rknn_app_context_t *app_ctx, void *outputs, letterbox_t *letter
 
     memset(od_results, 0, sizeof(object_detect_result_list));
 
-    // Dispatch to appropriate processing function based on model type
-    if (app_ctx->model_type == YOLO_SIMPLIFIED) {
-        printf("Processing Simplified YOLO outputs\n");
-        validCount = process_simplified_yolo_outputs(app_ctx, outputs, filterBoxes, objProbs, classId, conf_threshold);
-    } else {
-        printf("Processing Standard YOLO outputs\n");
-        validCount = process_standard_yolo_outputs(app_ctx, outputs, filterBoxes, objProbs, classId, conf_threshold);
-    }
+    // Process YOLOX outputs
+    printf("Processing YOLOX outputs\n");
+    validCount = process_standard_yolox_outputs(app_ctx, outputs, filterBoxes, objProbs, classId, conf_threshold);
 
     // no object detect
     if (validCount <= 0)
@@ -946,8 +713,8 @@ int post_process(rknn_app_context_t *app_ctx, void *outputs, letterbox_t *letter
     return 0;
 }
 
-// Standard YOLO processing function (DFL-based implementation)
-static int process_standard_yolo_outputs(rknn_app_context_t *app_ctx, void *outputs, 
+// Standard YOLOX processing function (DFL-based implementation)
+static int process_standard_yolox_outputs(rknn_app_context_t *app_ctx, void *outputs, 
                                          std::vector<float> &filterBoxes, std::vector<float> &objProbs, 
                                          std::vector<int> &classId, float conf_threshold)
 {
@@ -1039,8 +806,8 @@ static int process_standard_yolo_outputs(rknn_app_context_t *app_ctx, void *outp
     return validCount;
 }
 
-// Simplified YOLO processing function (unified tensor implementation)
-static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *outputs,
+// Simplified YOLOX processing function (unified tensor implementation)
+static int process_simplified_yolox_outputs(rknn_app_context_t *app_ctx, void *outputs,
                                            std::vector<float> &filterBoxes, std::vector<float> &objProbs,
                                            std::vector<int> &classId, float conf_threshold)
 {
@@ -1054,74 +821,15 @@ static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *ou
     int model_in_h = app_ctx->model_height;
     int n_outputs = app_ctx->io_num.n_output;
 
-    // Handle different Simplified YOLO structures
-    if (n_outputs == 9) {
-        // YoloV8 structure: 9 outputs in groups of 3 (box, class, objectness)
-        // Process each scale level (3 scales)
-        for (int scale = 0; scale < 3; scale++) {
-            int box_idx = scale * 3 + 0;    // Box regression output
-            int cls_idx = scale * 3 + 1;    // Class prediction output  
-            int obj_idx = scale * 3 + 2;    // Objectness output
-
-#if defined(RV1106_1103)
-            int grid_h = app_ctx->output_attrs[box_idx].dims[1];
-            int grid_w = app_ctx->output_attrs[box_idx].dims[2];
-#elif defined(RKNPU1)
-            int grid_h = app_ctx->output_attrs[box_idx].dims[1];
-            int grid_w = app_ctx->output_attrs[box_idx].dims[0];
-#else
-            int grid_h = app_ctx->output_attrs[box_idx].dims[2];
-            int grid_w = app_ctx->output_attrs[box_idx].dims[3];
-#endif
-            int stride = model_in_h / grid_h;
-
-#if defined(RV1106_1103)
-            if (app_ctx->is_quant) {
-                validCount += process_yolov8_scale_i8(
-                    (int8_t *)_outputs[box_idx]->virt_addr, app_ctx->output_attrs[box_idx].zp, app_ctx->output_attrs[box_idx].scale,
-                    (int8_t *)_outputs[cls_idx]->virt_addr, app_ctx->output_attrs[cls_idx].zp, app_ctx->output_attrs[cls_idx].scale,
-                    (int8_t *)_outputs[obj_idx]->virt_addr, app_ctx->output_attrs[obj_idx].zp, app_ctx->output_attrs[obj_idx].scale,
-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
-            } else {
-                printf("RV1106/1103 only support quantization mode\n");
-                return -1;
-            }
-#elif defined(RKNPU1)
-            if (app_ctx->is_quant) {
-                validCount += process_yolov8_scale_u8(
-                    (uint8_t *)_outputs[box_idx].buf, app_ctx->output_attrs[box_idx].zp, app_ctx->output_attrs[box_idx].scale,
-                    (uint8_t *)_outputs[cls_idx].buf, app_ctx->output_attrs[cls_idx].zp, app_ctx->output_attrs[cls_idx].scale,
-                    (uint8_t *)_outputs[obj_idx].buf, app_ctx->output_attrs[obj_idx].zp, app_ctx->output_attrs[obj_idx].scale,
-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
-            } else {
-                validCount += process_yolov8_scale_fp32(
-                    (float *)_outputs[box_idx].buf, (float *)_outputs[cls_idx].buf, (float *)_outputs[obj_idx].buf,
-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
-            }
-#else
-            if (app_ctx->is_quant) {
-                validCount += process_yolov8_scale_i8(
-                    (int8_t *)_outputs[box_idx].buf, app_ctx->output_attrs[box_idx].zp, app_ctx->output_attrs[box_idx].scale,
-                    (int8_t *)_outputs[cls_idx].buf, app_ctx->output_attrs[cls_idx].zp, app_ctx->output_attrs[cls_idx].scale,
-                    (int8_t *)_outputs[obj_idx].buf, app_ctx->output_attrs[obj_idx].zp, app_ctx->output_attrs[obj_idx].scale,
-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
-            } else {
-                validCount += process_yolov8_scale_fp32(
-                    (float *)_outputs[box_idx].buf, (float *)_outputs[cls_idx].buf, (float *)_outputs[obj_idx].buf,
-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
-            }
-#endif
-        }
-    } else {
-        // Legacy 3-output Simplified YOLO structure (like YOLOX with unified tensors)
-        for (int i = 0; i < 3; i++) {
+    // Handle 3-output structure (like YOLOX with unified tensors)
+    for (int i = 0; i < 3; i++) {
 #if defined(RV1106_1103)
             int grid_h = app_ctx->output_attrs[i].dims[1];
             int grid_w = app_ctx->output_attrs[i].dims[2];
             int stride = model_in_h / grid_h;
             
             if (app_ctx->is_quant) {
-                validCount += process_simplified_yolo_i8((int8_t *)_outputs[i]->virt_addr, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                validCount += process_simplified_yolox_i8((int8_t *)_outputs[i]->virt_addr, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
                                                         classId, conf_threshold, app_ctx->output_attrs[i].zp, app_ctx->output_attrs[i].scale);
             } else {
                 printf("RV1106/1103 only support quantization mode\n");
@@ -1133,10 +841,10 @@ static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *ou
             int stride = model_in_h / grid_h;
 
             if (app_ctx->is_quant) {
-                validCount += process_simplified_yolo_u8((uint8_t *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                validCount += process_simplified_yolox_u8((uint8_t *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
                                                         classId, conf_threshold, app_ctx->output_attrs[i].zp, app_ctx->output_attrs[i].scale);
             } else {
-                validCount += process_simplified_yolo_fp32((float *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                validCount += process_simplified_yolox_fp32((float *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
                                                           classId, conf_threshold);
             }
 #else
@@ -1145,15 +853,14 @@ static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *ou
             int stride = model_in_h / grid_h;
 
             if (app_ctx->is_quant) {
-                validCount += process_simplified_yolo_i8((int8_t *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                validCount += process_simplified_yolox_i8((int8_t *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
                                                         classId, conf_threshold, app_ctx->output_attrs[i].zp, app_ctx->output_attrs[i].scale);
             } else {
-                validCount += process_simplified_yolo_fp32((float *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                validCount += process_simplified_yolox_fp32((float *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
                                                           classId, conf_threshold);
             }
 #endif
         }
-    }
     return validCount;
 }
 

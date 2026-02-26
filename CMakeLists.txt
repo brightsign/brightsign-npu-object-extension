@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.4.1)
 
-project(yolo_demo)
+project(object_detection_demo)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -169,7 +169,7 @@ set(CMAKE_INSTALL_RPATH "lib")
 # rknn_yolov5_demo
 include_directories( ${CMAKE_SOURCE_DIR}/include)
 
-add_executable(yolo_demo
+add_executable(object_detection_demo
         src/main.cpp
         src/file_utils.c
         src/image_utils.c
@@ -180,10 +180,10 @@ add_executable(yolo_demo
         src/transports/udp_transport.cpp
         src/transports/file_transport.cpp
         src/utils.cc
-        src/yolo.cc
+        src/yolox.cc
 )
 
-target_link_libraries(yolo_demo
+target_link_libraries(object_detection_demo
   ${RKNN_RT_LIB}
   ${OpenCV_LIBS}
   ${RGA_LIB}
@@ -192,16 +192,42 @@ target_link_libraries(yolo_demo
 
 # Convert TARGET_SOC to uppercase for SOC_DIR
 string(TOUPPER ${TARGET_SOC} SOC_DIR)
-# Custom command to copy .so files to the build directory
-add_custom_command(TARGET yolo_demo POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy ${RKNN_RT_LIB} $<TARGET_FILE_DIR:yolo_demo>
-  COMMAND ${CMAKE_COMMAND} -E copy ${RGA_LIB} $<TARGET_FILE_DIR:yolo_demo>
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/install/${SOC_DIR}/model $<TARGET_FILE_DIR:yolo_demo>/model
+
+# Build image-stream-server
+set(IMAGE_STREAM_SERVER_DIR ${CMAKE_BINARY_DIR}/bs-image-stream-server)
+set(IMAGE_STREAM_SERVER_BINARY ${IMAGE_STREAM_SERVER_DIR}/cmd/image-stream-server-arm64)
+
+add_custom_target(build_image_stream_server
+    COMMAND ${CMAKE_COMMAND} -E echo "Cloning and building bs-image-stream-server..."
+    COMMAND ${CMAKE_SOURCE_DIR}/scripts/build-image-stream-server.sh 
+            ${IMAGE_STREAM_SERVER_DIR} 
+            ${IMAGE_STREAM_SERVER_BINARY} 
+            ${CMAKE_BINARY_DIR}/image-stream-server
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Cloning and building bs-image-stream-server"
 )
+
+# Custom command to copy .so files to the build directory
+add_custom_command(TARGET object_detection_demo POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy ${RKNN_RT_LIB} $<TARGET_FILE_DIR:object_detection_demo>
+  COMMAND ${CMAKE_COMMAND} -E copy ${RGA_LIB} $<TARGET_FILE_DIR:object_detection_demo>
+  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/install/${SOC_DIR}/model $<TARGET_FILE_DIR:object_detection_demo>/model
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/image-stream-server $<TARGET_FILE_DIR:object_detection_demo>/image-stream-server
+)
+
+# Make object_detection_demo depend on image-stream-server build
+add_dependencies(object_detection_demo build_image_stream_server)
 
 # install target and libraries
 set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install/${SOC_DIR})
-install(TARGETS yolo_demo DESTINATION ./)
+install(TARGETS object_detection_demo DESTINATION ./)
+
+# Install the image stream server binary
+install(FILES ${CMAKE_BINARY_DIR}/image-stream-server
+        DESTINATION ./
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                   GROUP_READ GROUP_EXECUTE
+                   WORLD_READ WORLD_EXECUTE)
 
 # Use FILE(COPY) which preserves the actual files rather than symlinks
 install(CODE "

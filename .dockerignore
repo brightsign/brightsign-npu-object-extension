@@ -1,0 +1,41 @@
+# Ignore build directories
+build*/
+build_*/
+
+# Ignore git files
+.git
+.gitignore
+
+# Ignore documentation
+docs/
+*.md
+
+# Ignore test files
+tests/
+test_*
+
+# Ignore generated files
+*.o
+*.so
+*.a
+*.log
+*.zip
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore model files (not needed for SDK build)
+model/
+toolkit/
+
+# Ignore source files (not needed for SDK build)
+src/
+include/
+cmake/
+
+# Keep only necessary files for Docker build
+!brightsign-x86_64-cobra-toolchain-*.sh
+!sdk/

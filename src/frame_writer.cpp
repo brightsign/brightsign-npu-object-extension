@@ -1,13 +1,19 @@
 #include "frame_writer.h"
 #include "inference.h"
+#include "utils.h"
 #include <cstdio>
 #include <cstring>
 
 void DecoratedFrameWriter::writeFrame(cv::Mat& frame, const InferenceResult& result) {
-    // Check if we have any valid detections (score > 0 and class_id >= 0)
+    // Use confidence threshold from the result
+    float threshold = result.confidence_threshold;
+    
+    // Check if we have any valid high-confidence detections that are also selected
     int valid_detections = 0;
     for (int i = 0; i < result.detections.count; i++) {
-        if (result.detections.results[i].prop > 0.0f && result.detections.results[i].cls_id >= 0) {
+        if (result.detections.results[i].prop > threshold && 
+            result.detections.results[i].cls_id >= 0 &&
+            isClassSelected(result.detections.results[i].cls_id, result.selected_classes)) {
             valid_detections++;
         }
     }
@@ -40,7 +46,19 @@ void DecoratedFrameWriter::writeFrame(cv::Mat& frame, const InferenceResult& res
                     continue;
                 }
                 
-                auto color = cv::Scalar(0, 255, 0);  // green for detected objects
+                // Skip detections that are not in the selected classes
+                if (!isClassSelected(detection.cls_id, result.selected_classes)) {
+                    printf("Skipping unselected class: cls_id=%d\n", detection.cls_id);
+                    continue;
+                }
+                
+                // Choose color based on confidence threshold
+                cv::Scalar color;
+                if (detection.prop >= threshold) {
+                    color = cv::Scalar(0, 255, 0);  // Green for high confidence
+                } else {
+                    color = cv::Scalar(128, 128, 128);  // 50% gray for low confidence
+                }
                 auto& box = detection.box;
                 
                 // Validate box coordinates

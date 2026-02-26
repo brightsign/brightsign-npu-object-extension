@@ -3,7 +3,7 @@
 #include <thread>
 
 #include "inference.h"
-#include "yolo.h"
+#include "yolox.h"
 #include "postprocess.h"
 
 
@@ -27,7 +27,7 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
         printf("Error: Empty input image passed to runInference\n");
         object_detect_result_list empty_results;
         memset(&empty_results, 0, sizeof(empty_results));
-        return InferenceResult{empty_results, std::chrono::system_clock::now()};
+        return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
     }
     
     // Ensure the image has the right format
@@ -41,7 +41,7 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
             printf("Error: Unsupported channel count: %d\n", cap.channels());
             object_detect_result_list empty_results;
             memset(&empty_results, 0, sizeof(empty_results));
-            return InferenceResult{empty_results, std::chrono::system_clock::now()};
+            return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
         }
     }
     
@@ -53,27 +53,30 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
         printf("Exception in cv_to_image_buffer: %s\n", e.what());
         object_detect_result_list empty_results;
         memset(&empty_results, 0, sizeof(empty_results));
-        return InferenceResult{empty_results, std::chrono::system_clock::now()};
+        return InferenceResult{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
     }
 
     object_detect_result_list empty_results;
     memset(&empty_results, 0, sizeof(empty_results));
-    InferenceResult final_result{empty_results, std::chrono::system_clock::now()};
+    InferenceResult final_result{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
 
-    printf("calling inference_yolo_model\n");
+    printf("calling inference_yolox_model\n");
     object_detect_result_list results;
     memset(&results, 0, sizeof(results));  // Initialize results to avoid uninitialized data
     
-    int ret = inference_yolo_model(rknn_app_ctx.get(), &image, &results);
+    int ret = inference_yolox_model(rknn_app_ctx.get(), &image, &results, confidence_threshold);
     if (ret != 0) {
-        printf("inference_yolo_model fail! ret=%d\n", ret);
+        printf("inference_yolox_model fail! ret=%d\n", ret);
         return final_result;
     }
 
     // Set the detection results
     final_result.detections = results;
     final_result.timestamp = std::chrono::system_clock::now();
-    printf("inference_yolo_model success! count=%d\n", results.count);
+    final_result.selected_classes = selected_classes;  // Pass selected classes along
+    final_result.class_mapping = class_mapping;  // Pass class mapping along
+    final_result.confidence_threshold = confidence_threshold;  // Pass confidence threshold along
+    printf("inference_yolox_model success! count=%d\n", results.count);
 
     frames++;
     printf("Processed frame %d\n", frames);
@@ -86,8 +89,12 @@ MLInferenceThread::MLInferenceThread(
         ThreadSafeQueue<InferenceResult>& queue, 
         std::atomic<bool>& isRunning,
         int target_fps,
-        std::shared_ptr<FrameWriter> writer)
-    : resultQueue(queue), running(isRunning), target_fps(target_fps), frameWriter(writer) {
+        std::shared_ptr<FrameWriter> writer,
+        const std::vector<int>& selected_classes,
+        const std::unordered_map<std::string, int>& class_mapping,
+        float confidence_threshold)
+    : resultQueue(queue), running(isRunning), target_fps(target_fps), frameWriter(writer), 
+      selected_classes(selected_classes), class_mapping(class_mapping), confidence_threshold(confidence_threshold) {
     
     // Store pointer to source name (argv remains valid)
     this->source_name = source_name;
@@ -98,9 +105,9 @@ MLInferenceThread::MLInferenceThread(
     // Create and initialize the model with dynamic allocation
     rknn_app_ctx = std::make_unique<rknn_app_context_t>();
     memset(rknn_app_ctx.get(), 0, sizeof(rknn_app_context_t));
-    auto ret = init_yolo_model(model_path, rknn_app_ctx.get());
+    auto ret = init_yolox_model(model_path, rknn_app_ctx.get());
        if (ret != 0) {
-        printf("init_yolo_model fail! ret=%d model_path=%s\n", ret, model_path);
+        printf("init_yolox_model fail! ret=%d model_path=%s\n", ret, model_path);
         // return -1;
     }
 
@@ -109,9 +116,9 @@ MLInferenceThread::MLInferenceThread(
 
 MLInferenceThread::~MLInferenceThread() {
     if (rknn_app_ctx) {
-        auto ret = release_yolo_model(rknn_app_ctx.get());
+        auto ret = release_yolox_model(rknn_app_ctx.get());
         if (ret != 0) {
-            printf("release_yolo_model fail! ret=%d\n", ret);
+            printf("release_yolox_model fail! ret=%d\n", ret);
         }  
     }
 

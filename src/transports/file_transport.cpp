@@ -2,6 +2,9 @@
 #include <fstream>
 #include <iostream>
 #include <filesystem>
+#include <unistd.h>
+#include <cstring>
+#include <fcntl.h>
 
 FileTransport::FileTransport(const std::string& filepath) 
     : filepath(filepath), enabled(true) {
@@ -40,6 +43,20 @@ bool FileTransport::send(const std::string& data) {
             if (file.fail()) {
                 std::cerr << "Failed to write to temp file: " << temp_filepath << std::endl;
                 return false;
+            }
+            
+            // Close the file to ensure all C++ buffers are flushed
+            file.close();
+            
+            // Reopen to get file descriptor and fsync
+            int fd = ::open(temp_filepath.c_str(), O_RDONLY);
+            if (fd != -1) {
+                if (::fsync(fd) != 0) {
+                    std::cerr << "Failed to fsync file: " << strerror(errno) << std::endl;
+                    ::close(fd);
+                    return false;
+                }
+                ::close(fd);
             }
         } // File closed here
         

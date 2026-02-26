@@ -1,0 +1,2548 @@
+diff --git a/.github/workflows/build-extension.yml b/.github/workflows/build-extension.yml
+index f7f8b4e..f0feae7 100644
+--- a/.github/workflows/build-extension.yml
++++ b/.github/workflows/build-extension.yml
+@@ -27,7 +27,7 @@ on:
+ 
+ env:
+   DOCKER_IMAGE: bsoe-build
+-  S3_URL: s3://bs-npu-artifacts-cicd/brightsign-npu-yolox
++  S3_URL: s3://bs-npu-artifacts-cicd/brightsign-npu-object-detect
+ 
+ jobs:
+   build-extension:
+@@ -148,5 +148,5 @@ jobs:
+ 
+       - name: Export dev packages
+         run: |
+-          aws s3 cp ./yolo-dev-*.zip ${{ env.S3_URL }}/packages/development/
+-          aws s3 cp ./yolo-ext-*.zip ${{ env.S3_URL }}/packages/extension/
++          aws s3 cp ./objdet-dev-*.zip ${{ env.S3_URL }}/packages/development/
++          aws s3 cp ./objdet-ext-*.zip ${{ env.S3_URL }}/packages/extension/
+diff --git a/.vscode/launch.json b/.vscode/launch.json
+index 41afe96..b758475 100644
+--- a/.vscode/launch.json
++++ b/.vscode/launch.json
+@@ -5,13 +5,13 @@
+     "version": "0.2.0",
+     "configurations": [
+         {
+-            "name": "Debug yolo_demo",
++            "name": "Debug object_detection_demo",
+             "type": "cppdbg",
+             "request": "launch",
+-            "program": "${workspaceFolder}/build/yolo_demo",
++            "program": "${workspaceFolder}/build/object_detection_demo",
+             "args": [
+                     // "${workspaceFolder}/build/model/yolox_s.rknn",
+-                    "${workspaceFolder}/build/model/yolov8n.rknn",
++                    "${workspaceFolder}/build/model/yolox_s.rknn",
+                     "/dev/video0",
+                     // "${workspaceFolder}/toolkit/rknn_model_zoo/examples/yolov8/model/bus.jpg",
+                     "--classes", "can,remote,alien"
+@@ -42,7 +42,7 @@
+                     "ignoreFailures": true
+                 }
+             ],
+-            "preLaunchTask": "Build yolo_demo",
++            "preLaunchTask": "Build object_detection_demo",
+             "miDebuggerPath": "/usr/bin/gdb"
+         }
+     ]
+diff --git a/.vscode/tasks.json b/.vscode/tasks.json
+index a5d1841..fa53cf9 100644
+--- a/.vscode/tasks.json
++++ b/.vscode/tasks.json
+@@ -2,7 +2,7 @@
+     "version": "2.0.0",
+     "tasks": [
+         {
+-            "label": "Build yolo_demo",
++            "label": "Build object_detection_demo",
+             "type": "shell",
+             "command": "cd ${workspaceFolder} && make -C build",
+             "group": {
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 200c766..ee85d7d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,6 +1,6 @@
+ cmake_minimum_required(VERSION 3.4.1)
+ 
+-project(yolo_demo)
++project(object_detection_demo)
+ 
+ set(CMAKE_CXX_STANDARD 20)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+@@ -169,7 +169,7 @@ set(CMAKE_INSTALL_RPATH "lib")
+ # rknn_yolov5_demo
+ include_directories( ${CMAKE_SOURCE_DIR}/include)
+ 
+-add_executable(yolo_demo
++add_executable(object_detection_demo
+         src/main.cpp
+         src/file_utils.c
+         src/image_utils.c
+@@ -180,10 +180,10 @@ add_executable(yolo_demo
+         src/transports/udp_transport.cpp
+         src/transports/file_transport.cpp
+         src/utils.cc
+-        src/yolo.cc
++        src/yolox.cc
+ )
+ 
+-target_link_libraries(yolo_demo
++target_link_libraries(object_detection_demo
+   ${RKNN_RT_LIB}
+   ${OpenCV_LIBS}
+   ${RGA_LIB}
+@@ -192,43 +192,16 @@ target_link_libraries(yolo_demo
+ 
+ # Convert TARGET_SOC to uppercase for SOC_DIR
+ string(TOUPPER ${TARGET_SOC} SOC_DIR)
+-
+-# Clone and build the Go image stream server with better error handling
+-set(IMAGE_STREAM_SERVER_DIR ${CMAKE_BINARY_DIR}/bs-image-stream-server)
+-set(IMAGE_STREAM_SERVER_BINARY ${IMAGE_STREAM_SERVER_DIR}/cmd/image-stream-server-arm64)
+-
+-add_custom_target(image_stream_server ALL
+-    COMMAND ${CMAKE_COMMAND} -E echo "Cloning and building bs-image-stream-server..."
+-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}
+-    COMMAND bash -c "set -e && if [ ! -d '${IMAGE_STREAM_SERVER_DIR}' ]; then echo 'Cloning bs-image-stream-server...' && git clone git@github.com:brightsign/bs-image-stream-server.git '${IMAGE_STREAM_SERVER_DIR}'; else echo 'Repository already exists, updating...' && cd '${IMAGE_STREAM_SERVER_DIR}' && git pull origin main || true; fi && echo 'Building image stream server...' && cd '${IMAGE_STREAM_SERVER_DIR}' && echo 'Current directory:' && pwd && make build-arm64 && if [ -f '${IMAGE_STREAM_SERVER_BINARY}' ]; then echo 'Build completed successfully, copying binary...' && cp '${IMAGE_STREAM_SERVER_BINARY}' '${CMAKE_BINARY_DIR}/image-stream-server'; else echo 'Build failed - binary not found at ${IMAGE_STREAM_SERVER_BINARY}' && exit 1; fi"
+-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+-    COMMENT "Cloning and building bs-image-stream-server"
+-    VERBATIM
+-)
+-
+ # Custom command to copy .so files to the build directory
+-add_custom_command(TARGET yolo_demo POST_BUILD
+-  COMMAND ${CMAKE_COMMAND} -E copy ${RKNN_RT_LIB} $<TARGET_FILE_DIR:yolo_demo>
+-  COMMAND ${CMAKE_COMMAND} -E copy ${RGA_LIB} $<TARGET_FILE_DIR:yolo_demo>
+-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/install/${SOC_DIR}/model $<TARGET_FILE_DIR:yolo_demo>/model
+-  # Copy the Go binary from the build directory
+-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_BINARY_DIR}/image-stream-server $<TARGET_FILE_DIR:yolo_demo>/image-stream-server
++add_custom_command(TARGET object_detection_demo POST_BUILD
++  COMMAND ${CMAKE_COMMAND} -E copy ${RKNN_RT_LIB} $<TARGET_FILE_DIR:object_detection_demo>
++  COMMAND ${CMAKE_COMMAND} -E copy ${RGA_LIB} $<TARGET_FILE_DIR:object_detection_demo>
++  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/install/${SOC_DIR}/model $<TARGET_FILE_DIR:object_detection_demo>/model
+ )
+ 
+-# Make sure image_stream_server builds before yolo_demo
+-add_dependencies(yolo_demo image_stream_server)
+-
+ # install target and libraries
+ set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install/${SOC_DIR})
+-install(TARGETS yolo_demo DESTINATION ./)
+-
+-# Install the image stream server binary from the copied location
+-install(FILES ${CMAKE_BINARY_DIR}/image-stream-server
+-        DESTINATION ./
+-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+-                   GROUP_READ GROUP_EXECUTE
+-                   WORLD_READ WORLD_EXECUTE
+-        OPTIONAL)
++install(TARGETS object_detection_demo DESTINATION ./)
+ 
+ # Use FILE(COPY) which preserves the actual files rather than symlinks
+ install(CODE "
+@@ -259,4 +232,4 @@ install(CODE "
+     foreach(lib \${TBB_LIB_FILES})
+         execute_process(COMMAND cp -L \${lib} \${CMAKE_INSTALL_PREFIX}/lib/)
+     endforeach()
+-")
++")
+\ No newline at end of file
+diff --git a/OrangePI_Development.md b/OrangePI_Development.md
+index 0950171..ee083e7 100644
+--- a/OrangePI_Development.md
++++ b/OrangePI_Development.md
+@@ -1,6 +1,6 @@
+ # Orange Pi Development Guide
+ 
+-This guide covers development and testing using Orange Pi boards (OPi) as an alternative development environment for the BrightSign YOLO Object Detection project.
++This guide covers development and testing using Orange Pi boards (OPi) as an alternative development environment for the BrightSign Object Detection project.
+ 
+ ## Overview
+ 
+@@ -47,7 +47,7 @@ This creates compiled RKNN models in the following locations:
+ ```
+ install/
+ ├── RK3588/model/          # For Orange Pi 5/5B and BrightSign XT-5
+-│   ├── yolov8n.rknn      # YOLOv8 nano model
++│   ├── yolov8n.rknn      # Legacy YOLOv8 model (deprecated)
+ │   ├── yolox_s.rknn      # YOLOX small model
+ │   └── coco_80_labels_list.txt  # Class labels
+ ├── RK3576/model/          # For Firebird dev boards
+@@ -59,16 +59,15 @@ install/
+ #### Transfer to Orange Pi:
+ ```bash
+ # Copy the entire project tree to Orange Pi
+-scp -r /path/to/cv-npu-yolo-object-detect orangepi:/home/user/
++scp -r /path/to/cv-npu-object-detect orangepi:/home/user/
+ 
+ # Or copy just the compiled models if project already exists on Orange Pi
+-scp -r install/ orangepi:/home/user/cv-npu-yolo-object-detect/
++scp -r install/ orangepi:/home/user/cv-npu-object-detect/
+ ```
+ 
+ **Model Location on Orange Pi**: After copying, compiled models will be available at:
+ - **Primary models**: `install/RK3588/model/` (compatible with Orange Pi 5 series)
+-- **YOLOv8**: `install/RK3588/model/yolov8n.rknn`
+-- **YOLOX**: `install/RK3588/model/yolox_s.rknn`
++- **YOLOX**: `install/RK3588/model/yolox_s.rknn` (primary model)
+ - **Labels**: `install/RK3588/model/coco_80_labels_list.txt`
+ 
+ ### 2. Building on Orange Pi
+@@ -76,7 +75,7 @@ scp -r install/ orangepi:/home/user/cv-npu-yolo-object-detect/
+ All commands in this section are executed on the Orange Pi (via SSH or directly):
+ 
+ ```bash
+-cd cv-npu-yolo-object-detect
++cd cv-npu-object-detect
+ 
+ # Clean any previous builds
+ rm -rf build
+@@ -99,30 +98,26 @@ make install
+ After building, you can test the application directly using the compiled models:
+ 
+ ```bash
+-cd cv-npu-yolo-object-detect
++cd cv-npu-object-detect
+ 
+-# Test YOLOv8 with USB camera (V4L device mode)
+-./build/yolo_demo install/RK3588/model/yolov8n.rknn /dev/video0
+-
+-# Test YOLOX with USB camera
+-./build/yolo_demo install/RK3588/model/yolox_s.rknn /dev/video0
++# Test YOLOX with USB camera (V4L device mode)
++./build/object_detection_demo install/RK3588/model/yolox_s.rknn /dev/video0
+ 
+ # Test with image file (one-shot mode)
+-./build/yolo_demo install/RK3588/model/yolov8n.rknn /path/to/test_image.jpg
++./build/object_detection_demo install/RK3588/model/yolox_s.rknn /path/to/test_image.jpg
+ 
+ # Test with class filtering (only show specific objects)
+-./build/yolo_demo install/RK3588/model/yolov8n.rknn /dev/video0 --classes person,car,dog
++./build/object_detection_demo install/RK3588/model/yolox_s.rknn /dev/video0 --classes person,car,dog
+ 
+ # Test with confidence threshold (reduce false positives)
+-./build/yolo_demo install/RK3588/model/yolov8n.rknn /dev/video0 --confidence-threshold 0.5
++./build/object_detection_demo install/RK3588/model/yolox_s.rknn /dev/video0 --confidence-threshold 0.5
+ 
+ # Test both class filtering and confidence threshold
+-./build/yolo_demo install/RK3588/model/yolox_s.rknn /dev/video0 --classes person,bicycle --confidence-threshold 0.6
++./build/object_detection_demo install/RK3588/model/yolox_s.rknn /dev/video0 --classes person,bicycle --confidence-threshold 0.6
+ ```
+ 
+ **Available Models for Testing:**
+-- **YOLOv8**: `install/RK3588/model/yolov8n.rknn` (YOLO Simplified architecture)
+-- **YOLOX**: `install/RK3588/model/yolox_s.rknn` (YOLOX architecture)
++- **YOLOX**: `install/RK3588/model/yolox_s.rknn` (YOLOX architecture - primary model)
+ - **Labels**: `install/RK3588/model/coco_80_labels_list.txt` (80 COCO classes)
+ 
+ **Model Verification:**
+@@ -130,7 +125,6 @@ cd cv-npu-yolo-object-detect
+ # Verify all required models are present
+ ls -la install/RK3588/model/
+ # Should show:
+-# yolov8n.rknn (several MB)
+ # yolox_s.rknn (several MB)  
+ # coco_80_labels_list.txt (small text file)
+ 
+@@ -145,8 +139,8 @@ Orange Pi provides excellent debugging capabilities:
+ 
+ ```bash
+ # Debug with GDB
+-gdb ./build/yolo_demo
+-(gdb) run install/RK3588/model/yolov8n.rknn /dev/video0
++gdb ./build/object_detection_demo
++(gdb) run install/RK3588/model/yolox_s.rknn /dev/video0
+ 
+ # Monitor system resources
+ htop
+@@ -204,7 +198,7 @@ After development and testing on Orange Pi:
+    ```bash
+    # Create deployment package
+    cd install
+-   zip -r ../yolo-demo-$(date +%s).zip ./
++   zip -r ../objdet-demo-$(date +%s).zip ./
+    ```
+ 
+ 3. **Deploy to BrightSign player** following the extension installation process.
+@@ -243,7 +237,6 @@ ffplay /dev/video0
+ ```bash
+ # Verify model files exist and are readable
+ ls -la install/RK3588/model/
+-file install/RK3588/model/yolov8n.rknn
+ file install/RK3588/model/yolox_s.rknn
+ 
+ # Check model file sizes (should be several MB each)
+@@ -261,7 +254,7 @@ cat install/RK3588/model/coco_80_labels_list.txt | head -10
+ ./compile-models
+ 
+ # Then copy to Orange Pi:
+-scp -r install/ orangepi:/home/user/cv-npu-yolo-object-detect/
++scp -r install/ orangepi:/home/user/cv-npu-object-detect/
+ ```
+ 
+ **Build errors**:
+diff --git a/README.md b/README.md
+index 4d77d47..df2113f 100644
+--- a/README.md
++++ b/README.md
+@@ -2,9 +2,7 @@
+ 
+ **Automated AI object detection extension for BrightSign Series 5 players using Rockchip NPU acceleration.**
+ 
+-This project provides a complete, automated build system to create BrightSign extensions that run object detection with YOLOX on the NPU at ~30 FPS with selective class detection and configurable confidence thresholds.
+-
+-**NEW**: Now supports selective class detection - focus on specific object classes while preserving complete detection data!
++This project provides a complete, automated build system to create BrightSign extensions that run object detection on the NPU at ~30 FPS with selective class detection and configurable confidence thresholds.
+ 
+ ## 🚀 Quick Start (Complete Automated Workflow)
+ 
+@@ -15,7 +13,7 @@ __Total Time__: 60-90 minutes | __Prerequisites__: Docker, git, x86_64 Linux hos
+ ```bash
+ # 1. Clone and setup environment (5-10 minutes)
+ git clone <repository-url>
+-cd cv-npu-yolo-object-detect
++cd brightsign-npu-object-extension
+ ./setup
+ 
+ # 2. Compile ONNX models to RKNN format (3-5 minutes)
+@@ -38,8 +36,6 @@ In a typical development workflow, steps 1 - 4 (setup, model compilation, build
+ 
+ ## 🤖 Automated Build Script
+ 
+-**NEW**: Use the automated build script to run all steps with a single command:
+-
+ ```bash
+ # Run all steps automatically (no prompts)
+ ./scripts/runall.sh --auto
+@@ -76,7 +72,7 @@ In a typical development workflow, steps 1 - 4 (setup, model compilation, build
+ **🎯 Deploy to Player**:
+ 
+ 1. Transfer extension package to BrightSign player via DWS
+-2. Install: `bash ./ext_npu_obj_install-lvm.sh && reboot`
++2. Install: `bash ./ext_objdet_install-lvm.sh && reboot`
+ 3. Extension auto-starts with USB camera detection
+ 
+ ## 🚀 Build using Github Action
+@@ -168,8 +164,6 @@ __Note__: Use underscores instead of spaces (e.g., `cell_phone`, not `cell phone
+ 
+ ## 📄 Extension Versioning & Manifest
+ 
+-**NEW in v1.2.0**: This extension now includes BrightSign's new manifest system for version management and compatibility checking.
+-
+ ### Version Information
+ 
+ - **Current Version**: 1.2.0
+@@ -206,8 +200,6 @@ cp manifest-config.template.json manifest-config.json
+ 
+ ## 🚀 Phase 3: Advanced Extension Management
+ 
+-**NEW in v1.2.0**: Complete automated update management, rollback capabilities, and enhanced validation system.
+-
+ ### Update Management & Orchestration
+ 
+ Comprehensive update workflow with policy enforcement, version validation, and automatic configuration preservation:
+@@ -414,7 +406,7 @@ Benefits:
+ ./build-apps LS5      # LS-5 players only
+ 
+ # Compile specific models only
+-./compile-models XT5           # Compile models for XT-5 only
++./compile-models XT5           # YOLOX for XT-5 only
+ ./compile-models --clean       # Clean rebuild all models
+ 
+ # SDK build options
+@@ -457,34 +449,6 @@ Benefits:
+ ./setup  # Re-run if Docker images corrupted
+ ```
+ 
+-### Image Stream Server
+-
+-The **BrightSign Image Stream Server** is a built-in networking feature that serves camera frames over HTTP. Image Stream Server will start along with voice detection extension as a standalone daemon running in the background.The bs-image-stream-server continuously monitors a local image file by gaze detection and serves it via HTTP at 30 FPS. It specifically watches /tmp/output.jpg since that is where the BSMP files write their output.
+-
+-This is intended for development and testing purposes only.
+-
+-Enable or disable the image stream server using the registry options:
+-
+-**Configuration Options:**
+-
+-| Port Value | Behavior |
+-|------------|----------|
+-| `0` | __Disabled__ - Image stream server is turned off (recommended for this extension) |
+-| `20200` | __Default__ - Serves camera feed at `http://player-ip:20200/image_stream.jpg` |
+-
+-**Usage Examples:**
+-
+-```bash
+-# Disable image stream server
+-registry write networking bs-image-stream-server-port 0
+-
+-# Enable on default port 20200
+-registry write networking bs-image-stream-server-port 20200
+-
+-```
+-
+-> **Note**: Changes to the image stream server port require a player reboot to take effect.
+-
+ ## 🎯 Advanced Usage
+ 
+ ### Custom Models
+@@ -507,7 +471,7 @@ The extension automatically detects platform at runtime:
+ 
+ - **Confidence threshold**: Higher values reduce false positives
+ - **Class filtering**: Improves performance by reducing output processing
+-- **Model selection**: YOLOX provides excellent accuracy for object detection
++- **Model selection**: YOLOX (optimized for accuracy and performance)
+ 
+ ## 📚 Technical Documentation
+ 
+@@ -560,7 +524,7 @@ cd toolkit/rknn-toolkit2/docker
+ # Compile models manually
+ cd ../../../rknn_model_zoo
+ docker run -it --rm -v $(pwd):/zoo rknn_tk2 /bin/bash \
+-    -c "cd /zoo/examples/YOLOX/python && python convert.py ../model/yolox_s.onnx rk3588 i8 ../model/RK3588/yolox_s.rknn"
++    -c "cd /zoo/examples/yolox/python && python convert.py ../model/yolox_s.onnx rk3588 i8 ../model/RK3588/yolox_s.rknn"
+ ```
+ 
+ ### Manual SDK Building
+@@ -604,4 +568,4 @@ This project is released under [Apache 2.0 License](LICENSE.txt). Models from Ro
+ 
+ **🎉 Ready to get started?** Run `./setup` and follow the Quick Start guide above!
+ 
+-For questions or issues, see the troubleshooting section or check the technical documentation.
++For questions or issues, see the troubleshooting section or check the technical documentation.
+\ No newline at end of file
+diff --git a/TODO.md b/TODO.md
+index 693caf5..3161e88 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -31,7 +31,7 @@ AND, it seems we build yolov8n - and we just need to clip that out.  Can't even
+ [ ] no code comments say 'yolo' or 'yolov8'
+ [ ] compile-models script has with no model choices -- e.g. `yolov8`. ONLY yolox
+ [ ] executable binary name should not contain 'yolo' -- use 'object_detection_demo'
+-[ ] extension name should not contain 'yolo' -- use `bsext-obj`
++[ ] extension name should not contain 'yolo' -- use `bsext-objdet`
+ [ ] no output files such as `/tmp/yolo_output*` should contain 'yolo', use 'objdet'
+ [ ] manifest files and samples should not refer to 'yolo' only 'objdet'
+ [ ] github action output directory should not contain 'yolo' use 'object-detect'
+diff --git a/bsext_init b/bsext_init
+index ebc85b0..70957f7 100755
+--- a/bsext_init
++++ b/bsext_init
+@@ -1,21 +1,20 @@
+ #!/bin/bash
+ ### BEGIN INIT INFO
+-# Provides:          bsext-yolo
++# Provides:          bsext-objdet
+ # Required-Start:    $remote_fs $syslog
+ # Required-Stop:     $remote_fs $syslog
+ # Default-Start:     2 3 4 5
+ # Default-Stop:      0 1 6
+-# Short-Description: BrightSign Yolo Object Detection Extension
+-# Description:       Runs the BrightSign NPU-based Yolo Object detection service
++# Short-Description: BrightSign Object Detection Extension
++# Description:       Runs the BrightSign NPU-based Object detection service
+ ### END INIT INFO
+ 
+ # Source function library if it exists
+ [ -f /etc/init.d/functions ] && . /etc/init.d/functions
+ 
+ SCRIPT_PATH=$(dirname $(realpath $0))
+-DAEMON_NAME="bsext-yolo"
++DAEMON_NAME="bsext-obj"
+ PIDFILE="/var/run/${DAEMON_NAME}.pid"
+-STREAM_SERVER_PIDFILE="/var/run/bsext-image-stream-server.pid"
+ 
+ # defaults -- these can be overridden by the registry
+ DISABLE_AUTO_START=false
+@@ -673,8 +672,8 @@ validate_manifest() {
+     return 0
+ }
+ 
+-# Common function to run the attention demo
+-run_yolo_demo() {
++# Common function to run the object detection demo
++run_object_detection_demo() {
+     # Get command arguments from setup function
+ 
+     SOC_NAME=$(get_soc_name)
+@@ -705,27 +704,10 @@ run_yolo_demo() {
+     if [ "$background" = "true" ]; then
+         # Run as a daemon in the background
+         start-stop-daemon --start --background --make-pidfile --pidfile ${PIDFILE} \
+-                          --exec ${SOC_HOME}/yolo_demo -- ${CMD_ARGS}
++                          --exec ${SOC_HOME}/object_detection_demo -- ${CMD_ARGS}
+     else
+         # Run directly in foreground
+-        ${SOC_HOME}/yolo_demo ${CMD_ARGS}
+-    fi
+-}
+-
+-run_stream_server() {
+-    # Default to running in foreground
+-    echo "run_stream_server called with background=$2"
+-    local background=$1
+-    local port=$2
+-    echo "run_stream_server called with port=${port}"
+-    if [ "$background" = "true" ]; then
+-        # Run as a daemon in the background
+-        echo "start-stop daemon =${SOC_HOME}/image-stream-server"
+-        start-stop-daemon --start --background --make-pidfile --pidfile ${STREAM_SERVER_PIDFILE} \
+-                          --exec ${SOC_HOME}/image-stream-server -- -port ${port}
+-    else
+-        # Run directly in foreground
+-        ${SOC_HOME}/image-stream-server -port ${port}
++        ${SOC_HOME}/object_detection_demo ${CMD_ARGS}
+     fi
+ }
+ 
+@@ -742,29 +724,12 @@ do_start() {
+     fi
+ 
+     # Start the attention_demo process as a daemon
+-    run_yolo_demo true
+-
+-    STREAM_SERVER_PORT=20200  # default port for image stream server
+-    reg_stream_server_port=$(registry networking bs-image-stream-server-port)
+-    echo "Starting image stream server on port ${reg_stream_server_port}"
+-    if [ -n "${reg_stream_server_port}" ]; then
+-        STREAM_SERVER_PORT=${reg_stream_server_port}
+-    fi
+-
+-    if [ "${STREAM_SERVER_PORT}" = "0" ]; then
+-        echo "Image stream server is disabled (port set to 0)"
+-        return
+-    fi
+-    # Start the image stream server process as a daemon
+-    run_stream_server true ${STREAM_SERVER_PORT}
++    run_object_detection_demo true
+ }
+ 
+ do_stop() {
+     start-stop-daemon --stop --pidfile ${PIDFILE}
+     rm -f ${PIDFILE}
+-
+-    start-stop-daemon --stop --pidfile ${STREAM_SERVER_PIDFILE}
+-    rm -f ${STREAM_SERVER_PIDFILE}
+ }
+ 
+ # Configuration backup and restore functions for Phase 3
+@@ -793,7 +758,7 @@ backup_configuration() {
+     fi
+     
+     # Backup user data directories
+-    local data_dirs=("/tmp/yolo_output" "/var/log/bsext-yolo" "/tmp/results.json" "/tmp/output.jpg")
++    local data_dirs=("/tmp/objdet_output" "/var/log/bsext-obj" "/tmp/results.json" "/tmp/output.jpg")
+     for data_path in "${data_dirs[@]}"; do
+         if [[ -e "$data_path" ]]; then
+             local data_name=$(basename "$data_path")
+@@ -918,8 +883,7 @@ case "$1" in
+         echo "Running ${DAEMON_NAME} in foreground"
+         validate_manifest
+         # Run directly in foreground (not as daemon)
+-        run_yolo_demo false
+-	run_stream_server false 20200
++        run_object_detection_demo false
+         ;;
+     backup)
+         echo "Creating configuration backup for ${DAEMON_NAME}"
+diff --git a/build b/build
+index 3a7f071..c10bd9f 100755
+--- a/build
++++ b/build
+@@ -1,6 +1,6 @@
+ #!/bin/bash
+ 
+-# BrightSign YOLO Object Detection - Build Script
++# BrightSign Object Detection - Build Script
+ # Builds SDK from BrightSign OE sources and compiles C++ application
+ 
+ set -e
+@@ -26,7 +26,7 @@ BRIGHTSIGN_OS_VERSION=${BRIGHTSIGN_OS_VERSION:-9.1.52}
+ 
+ usage() {
+     echo "Usage: $0 [OPTIONS] [TARGET]"
+-    echo "Build BrightSign YOLO Object Detection using BitBake SDK build"
++    echo "Build BrightSign Object Detection using BitBake SDK build"
+     echo ""
+     echo "Arguments:"
+     echo "  TARGET              Package or recipe to build (default: brightsign-sdk)"
+@@ -126,7 +126,7 @@ fi
+ 
+ # Verbose output
+ if [ "$VERBOSE" = true ]; then
+-    echo "BrightSign YOLO Object Detection - Build Script"
++    echo "BrightSign Object Detection - Build Script"
+     echo "==============================================="
+     echo "Script directory: $SCRIPT_DIR"
+     echo "Target: $TARGET"
+diff --git a/build-apps b/build-apps
+index 1514163..67d2105 100755
+--- a/build-apps
++++ b/build-apps
+@@ -1,6 +1,6 @@
+ #!/bin/bash
+ 
+-# BrightSign YOLO Object Detection - C++ Application Build Script
++# BrightSign Object Detection - C++ Application Build Script
+ # Builds the C++ application for all platforms using installed SDK
+ 
+ set -e
+@@ -29,7 +29,7 @@ declare -A PLATFORMS=(
+ 
+ usage() {
+     echo "Usage: $0 [OPTIONS] [PLATFORM]"
+-    echo "Build BrightSign YOLO Object Detection C++ application"
++    echo "Build BrightSign Object Detection C++ application"
+     echo ""
+     echo "Arguments:"
+     echo "  PLATFORM              Target platform: XT5, LS5, Firebird (default: all)"
+@@ -212,23 +212,23 @@ build_platform() {
+     fi
+     
+     # Check if build succeeded
+-    if [ -f "$build_dir/yolo_demo" ]; then
++    if [ -f "$build_dir/object_detection_demo" ]; then
+         success "$platform build completed successfully"
+         
+         # List build artifacts
+         if [ "$VERBOSE" = true ]; then
+             echo "Build artifacts:"
+-            ls -la "$build_dir/yolo_demo"
++            ls -la "$build_dir/object_detection_demo"
+             ls -la "$build_dir/"*.so 2>/dev/null || true
+         fi
+     else
+-        error "Build failed - yolo_demo not found in $build_dir"
++        error "Build failed - object_detection_demo not found in $build_dir"
+     fi
+ }
+ 
+ # Main build function
+ main() {
+-    echo "BrightSign YOLO Object Detection - C++ Application Build"
++    echo "BrightSign Object Detection - C++ Application Build"
+     echo "========================================================"
+     
+     start_time=$(date +%s)
+@@ -257,14 +257,14 @@ main() {
+     echo "Build artifacts:"
+     for platform in "${!PLATFORMS[@]}"; do
+         local build_dir="build_${platform,,}"
+-        if [ -f "$build_dir/yolo_demo" ]; then
+-            echo "  ✓ $platform: $build_dir/yolo_demo"
++        if [ -f "$build_dir/object_detection_demo" ]; then
++            echo "  ✓ $platform: $build_dir/object_detection_demo"
+         fi
+     done
+     
+     echo ""
+     echo "Next steps:"
+-    echo "1. Test locally: ./build_xt5/yolo_demo /path/to/image.jpg"
++    echo "1. Test locally: ./build_xt5/object_detection_demo /path/to/image.jpg"
+     echo "2. Package for deployment (use existing packaging scripts)"
+     echo "3. Deploy to BrightSign player"
+ }
+diff --git a/docs/design-principles-analysis.md b/docs/design-principles-analysis.md
+index 622047e..67aa9e3 100644
+--- a/docs/design-principles-analysis.md
++++ b/docs/design-principles-analysis.md
+@@ -12,7 +12,7 @@
+ 
+ ## Overview
+ 
+-This document analyzes how the BrightSign YOLO Object Detection application adheres to fundamental software design principles. The analysis covers SOLID principles, Clean Code practices, Separation of Concerns, CAP theorem considerations, and the implementation of common design patterns.
++This document analyzes how the BrightSign Object Detection application adheres to fundamental software design principles. The analysis covers SOLID principles, Clean Code practices, Separation of Concerns, CAP theorem considerations, and the implementation of common design patterns.
+ 
+ ### Analysis Summary
+ 
+@@ -185,7 +185,7 @@ auto http_transport = std::make_shared<HTTPTransport>("http://api.example.com");
+ Publisher http_publisher(http_transport, queue, running, formatter, 1);
+ 
+ // Adding Prometheus formatter requires no changes to Publisher
+-auto prometheus_formatter = std::make_shared<PrometheusFormatter>("yolo_metrics");
++auto prometheus_formatter = std::make_shared<PrometheusFormatter>("objdet_metrics");
+ Publisher metrics_publisher(transport, queue, running, prometheus_formatter, 1);
+ ```
+ 
+@@ -946,7 +946,7 @@ pie title Technical Debt Distribution
+ 
+ ## Conclusion
+ 
+-The BrightSign YOLO Object Detection application demonstrates **excellent adherence to software design principles**. The architecture is well-structured, extensible, and maintainable. The strategic use of design patterns, particularly the Strategy pattern for transport and formatting, enables easy extension without modification of existing code.
++The BrightSign Object Detection application demonstrates **excellent adherence to software design principles**. The architecture is well-structured, extensible, and maintainable. The strategic use of design patterns, particularly the Strategy pattern for transport and formatting, enables easy extension without modification of existing code.
+ 
+ ### Key Strengths
+ - ✅ Excellent separation of concerns
+diff --git a/docs/integration-extension-points.md b/docs/integration-extension-points.md
+index 7d6abe3..f8d7ac8 100644
+--- a/docs/integration-extension-points.md
++++ b/docs/integration-extension-points.md
+@@ -9,7 +9,7 @@
+ 
+ ## Overview
+ 
+-The BrightSign YOLO Object Detection application is architected with well-defined extension points that enable developers to customize behavior, add new functionality, and integrate with external systems. The design follows the Open/Closed Principle, allowing extensions without modifying existing code.
++The BrightSign Object Detection application is architected with well-defined extension points that enable developers to customize behavior, add new functionality, and integrate with external systems. The design follows the Open/Closed Principle, allowing extensions without modifying existing code.
+ 
+ ### Key Extension Categories
+ 
+@@ -96,7 +96,7 @@ private:
+     
+ public:
+     MQTTTransport(const std::string& broker, const std::string& topic, 
+-                  const std::string& client_id = "yolo_detector");
++                  const std::string& client_id = "obj_detector");
+     ~MQTTTransport();
+     
+     // Transport interface implementation
+@@ -220,7 +220,7 @@ void MQTTTransport::messageDelivered(void* context, MQTTClient_deliveryToken tok
+ // Create MQTT transport for IoT integration
+ auto mqtt_transport = std::make_shared<MQTTTransport>(
+     "tcp://mqtt.broker.com:1883",
+-    "sensors/yolo/detections",
++    "sensors/objdet/detections",
+     "brightsign_player_001"
+ );
+ 
+@@ -333,7 +333,7 @@ private:
+     std::map<std::string, std::string> labels;
+     
+ public:
+-    explicit PrometheusFormatter(const std::string& job = "yolo_detection") 
++    explicit PrometheusFormatter(const std::string& job = "object_detection") 
+         : job_name(job) {}
+     
+     void setLabel(const std::string& key, const std::string& value) {
+@@ -358,7 +358,7 @@ public:
+         
+         // Generate Prometheus metrics in exposition format
+         for (const auto& [class_name, count] : class_counts) {
+-            ss << "yolo_detections_total{";
++            ss << "objdet_detections_total{";
+             ss << "job=\"" << job_name << "\"";
+             ss << ",class=\"" << class_name << "\"";
+             
+@@ -373,7 +373,7 @@ public:
+         }
+         
+         // Add summary metrics
+-        ss << "yolo_inference_total{job=\"" << job_name << "\"} 1 "
++        ss << "objdet_inference_total{job=\"" << job_name << "\"} 1 "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(
+                result.timestamp.time_since_epoch()).count() << "\n";
+         
+@@ -389,13 +389,13 @@ public:
+ #include "formatters/prometheus_formatter.h"
+ 
+ // Create Prometheus formatter with custom labels
+-auto prometheus_formatter = std::make_shared<PrometheusFormatter>("yolo_object_detection");
++auto prometheus_formatter = std::make_shared<PrometheusFormatter>("object_detection");
+ prometheus_formatter->setLabel("instance", "brightsign_player_001");
+ prometheus_formatter->setLabel("location", "retail_store_front");
+ prometheus_formatter->setLabel("model", "yolox_s");
+ 
+ // Create HTTP transport for Prometheus push gateway
+-auto http_transport = std::make_shared<HTTPTransport>("http://pushgateway:9091/metrics/job/yolo");
++auto http_transport = std::make_shared<HTTPTransport>("http://pushgateway:9091/metrics/job/objdet");
+ 
+ // Create publisher for metrics
+ Publisher metrics_publisher(
+@@ -413,9 +413,9 @@ std::thread metrics_thread(std::ref(metrics_publisher));
+ #### Sample Prometheus Output
+ 
+ ```ini
+-yolo_detections_total{job="yolo_object_detection",class="person",instance="brightsign_player_001",location="retail_store_front",model="yolox_s"} 3 1674123456789
+-yolo_detections_total{job="yolo_object_detection",class="car",instance="brightsign_player_001",location="retail_store_front",model="yolox_s"} 1 1674123456789
+-yolo_inference_total{job="yolo_object_detection"} 1 1674123456789
++objdet_detections_total{job="object_detection",class="person",instance="brightsign_player_001",location="retail_store_front",model="yolox_s"} 3 1674123456789
++objdet_detections_total{job="object_detection",class="car",instance="brightsign_player_001",location="retail_store_front",model="yolox_s"} 1 1674123456789
++objdet_inference_total{job="object_detection"} 1 1674123456789
+ ```
+ 
+ This format is compatible with Prometheus monitoring systems and can be used for:
+@@ -704,4 +704,4 @@ int main(int argc, char** argv) {
+ }
+ ```
+ 
+-This performance testing framework enables comprehensive validation of system performance characteristics, helping ensure the YOLO detection system meets real-time requirements across different deployment scenarios.
+\ No newline at end of file
++This performance testing framework enables comprehensive validation of system performance characteristics, helping ensure the object detection system meets real-time requirements across different deployment scenarios.
+\ No newline at end of file
+diff --git a/docs/manifest-guide.md b/docs/manifest-guide.md
+index f0d6f8c..1b2bc4a 100644
+--- a/docs/manifest-guide.md
++++ b/docs/manifest-guide.md
+@@ -125,7 +125,7 @@ Define user-configurable settings accessible via BrightSign registry:
+ }
+ ```
+ 
+-Registry keys are automatically prefixed with `bsext-<extension-name>-`.
++Registry keys are automatically prefixed with `bsext-obj-` for the object detection extension.
+ 
+ ## Update Policy Configuration (Phase 3)
+ 
+@@ -325,10 +325,10 @@ Examples:
+ 
+ ```bash
+ # 1. Test update compatibility first
+-./sh/update-extension.sh --dry-run yolo-ext-20250201-123456.zip
++./sh/update-extension.sh --dry-run objdet-ext-20250201-123456.zip
+ 
+ # 2. Perform actual update with full validation
+-./sh/update-extension.sh yolo-ext-20250201-123456.zip
++./sh/update-extension.sh objdet-ext-20250201-123456.zip
+ 
+ # 3. Verify update success
+ ./bsext_init start
+@@ -339,13 +339,13 @@ Examples:
+ 
+ ```bash
+ # 1. List available backups
+-./sh/rollback-extension.sh --list-backups npu_yolo
++./sh/rollback-extension.sh --list-backups npu_obj
+ 
+ # 2. Test rollback capability
+-./sh/rollback-extension.sh --dry-run npu_yolo
++./sh/rollback-extension.sh --dry-run npu_obj
+ 
+ # 3. Perform rollback
+-./sh/rollback-extension.sh npu_yolo
++./sh/rollback-extension.sh npu_obj
+ 
+ # 4. Verify rollback success
+ ./bsext_init start
+@@ -376,10 +376,10 @@ Override policies with `--force` flag when necessary:
+ 
+ ```bash
+ # Force update despite policy restrictions
+-./sh/update-extension.sh --force yolo-ext-package.zip
++./sh/update-extension.sh --force objdet-ext-package.zip
+ 
+ # Force rollback despite policy restrictions  
+-./sh/rollback-extension.sh --force npu_yolo
++./sh/rollback-extension.sh --force npu_obj
+ ```
+ 
+ ## Backward Compatibility
+diff --git a/docs/software-architecture.md b/docs/software-architecture.md
+index 9e8fd89..1517b8e 100644
+--- a/docs/software-architecture.md
++++ b/docs/software-architecture.md
+@@ -13,7 +13,7 @@
+ 
+ ## Overview
+ 
+-The BrightSign YOLO Object Detection application is a computer vision system designed for real-time object detection on BrightSign Players (embedded ARM-based hardware). The architecture features a clear separation of concerns, modular design, and extensible patterns.
++The BrightSign Object Detection application is a computer vision system designed for real-time object detection on BrightSign Players (embedded ARM-based hardware). The architecture features a clear separation of concerns, modular design, and extensible patterns.
+ 
+ ### Key Architectural Characteristics
+ 
+@@ -93,7 +93,7 @@ graph TB
+     
+     subgraph "Domain Layer"
+         INF[Inference Engine]
+-        YOLO[YOLO Model]
++        YOLO[Object Detection Model]
+         PP[Post-Processing]
+     end
+     
+@@ -400,7 +400,7 @@ flowchart TD
+     SOC_DETECT --> RK3576[RK3576 Config]
+     SOC_DETECT --> RK3568[RK3568 Config]
+     
+-    RK3588 --> MODEL_LOAD[Load YOLO Model]
++    RK3588 --> MODEL_LOAD[Load Object Detection Model]
+     RK3576 --> MODEL_LOAD
+     RK3568 --> MODEL_LOAD
+     
+@@ -501,11 +501,11 @@ graph TD
+     end
+     
+     subgraph "Configuration Keys"
+-        VIDEO_DEV[bsext-yolo-video-device]
+-        MODEL_PATH[bsext-yolo-model-path]
+-        CLASSES[bsext-yolo-classes]
+-        CONFIDENCE[bsext-yolo-confidence-threshold]
+-        AUTO_START[bsext-yolo-disable-auto-start]
++        VIDEO_DEV[bsext-obj-video-device]
++        MODEL_PATH[bsext-obj-model-path]
++        CLASSES[bsext-obj-classes]
++        CONFIDENCE[bsext-obj-confidence-threshold]
++        AUTO_START[bsext-obj-disable-auto-start]
+     end
+     
+     DEFAULT --> DEVICE
+diff --git a/include/frame_writer.h b/include/frame_writer.h
+index 0ca3dc9..85a44dc 100644
+--- a/include/frame_writer.h
++++ b/include/frame_writer.h
+@@ -3,7 +3,7 @@
+ 
+ #include <string>
+ #include <opencv2/opencv.hpp>
+-#include "yolo.h"
++#include "yolox.h"
+ 
+ // Forward declaration for InferenceResult
+ struct InferenceResult;
+diff --git a/include/inference.h b/include/inference.h
+index c54eecb..1afb162 100644
+--- a/include/inference.h
++++ b/include/inference.h
+@@ -17,12 +17,12 @@
+ #include <opencv2/videoio.hpp>
+ 
+ #include "queue.h"
+-#include "yolo.h"
++#include "yolox.h"
+ #include "frame_writer.h"
+ 
+ // Struct to hold ML inference results
+ struct InferenceResult {
+-    object_detect_result_list detections;  // YOLO detection results
++    object_detect_result_list detections;  // Object detection results
+     std::chrono::system_clock::time_point timestamp;
+     std::vector<int> selected_classes;  // Selected class IDs for filtering
+     std::unordered_map<std::string, int> class_mapping;  // Class name to ID mapping
+diff --git a/include/postprocess.h b/include/postprocess.h
+index e90e39e..fa6128d 100644
+--- a/include/postprocess.h
++++ b/include/postprocess.h
+@@ -3,7 +3,7 @@
+ 
+ #include "rknn_api.h"
+ #include "common.h"
+-#include "yolo.h"
++#include "yolox.h"
+ #include "image_utils.h"
+ 
+ int post_process(rknn_app_context_t* app_ctx, void* outputs, letterbox_t* letter_box, 
+diff --git a/include/yolo.h b/include/yolox.h
+similarity index 54%
+rename from include/yolo.h
+rename to include/yolox.h
+index 505f457..49d1888 100644
+--- a/include/yolo.h
++++ b/include/yolox.h
+@@ -1,5 +1,5 @@
+-#ifndef _RKNN_DEMO_MOBILENET_H_
+-#define _RKNN_DEMO_MOBILENET_H_
++#ifndef _RKNN_DEMO_YOLOX_H_
++#define _RKNN_DEMO_YOLOX_H_
+ 
+ #include "rknn_api.h"
+ #include "common.h"
+@@ -10,12 +10,7 @@
+ #define OBJ_NUMB_MAX_SIZE 128
+ #define OBJ_NAME_MAX_SIZE 64
+ 
+-// YOLO model type enumeration
+-typedef enum {
+-    YOLO_STANDARD,    // Standard YOLO with DFL encoding and separate box/score tensors
+-    YOLO_SIMPLIFIED,  // Simplified YOLO with unified tensors and objectness scoring
+-    YOLO_UNKNOWN     // Unknown or unsupported model type
+-} yolo_model_type_t;
++// YOLOX model - standard YOLO with DFL encoding and separate box/score tensors
+ 
+ typedef struct {
+     rknn_context rknn_ctx;
+@@ -26,7 +21,7 @@ typedef struct {
+     int model_width;
+     int model_height;
+     bool is_quant;
+-    yolo_model_type_t model_type;  // Detected YOLO model type
++    // YOLOX model type - always standard format
+ } rknn_app_context_t;
+ 
+ typedef struct box_rect_t {
+@@ -48,11 +43,9 @@ typedef struct object_detect_result_list {
+     object_detect_result_t results[OBJ_NUMB_MAX_SIZE];
+ } object_detect_result_list;
+ 
+-int init_yolo_model(const char *model_path, rknn_app_context_t *app_ctx);
+-int release_yolo_model(rknn_app_context_t *app_ctx);
+-int inference_yolo_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold = BOX_THRESH);
++int init_yolox_model(const char *model_path, rknn_app_context_t *app_ctx);
++int release_yolox_model(rknn_app_context_t *app_ctx);
++int inference_yolox_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold = BOX_THRESH);
+ 
+-// Model type detection function
+-yolo_model_type_t detect_yolo_model_type(rknn_app_context_t *app_ctx);
+ 
+-#endif //_RKNN_DEMO_MOBILENET_H_
+\ No newline at end of file
++#endif //_RKNN_DEMO_YOLOX_H_
+\ No newline at end of file
+diff --git a/manifest-config.json b/manifest-config.json
+index 739d747..6db9c0d 100644
+--- a/manifest-config.json
++++ b/manifest-config.json
+@@ -1,14 +1,14 @@
+ {
+   "extension": {
+     "version": "1.2.0",
+-    "description": "NPU-accelerated object detection using YOLO models",
++    "description": "NPU-accelerated object detection",
+     "author": {
+       "name": "BrightSign LLC",
+       "email": "support@brightsign.biz",
+       "url": "https://www.brightsign.biz"
+     },
+     "license": "Apache-2.0",
+-    "homepage": "https://github.com/brightsign/cv-npu-yolo-object-detect",
++    "homepage": "https://github.com/brightsign/cv-npu-object-detect",
+     "category": "ai-vision"
+   },
+   
+diff --git a/manifest-config.template.json b/manifest-config.template.json
+index ed45945..e606dc6 100644
+--- a/manifest-config.template.json
++++ b/manifest-config.template.json
+@@ -104,7 +104,7 @@
+     ],
+     "_registryNotes": [
+       "Define user-configurable settings accessible via BrightSign registry",
+-      "Registry keys will be prefixed with 'bsext-yolo-' automatically"
++      "Registry keys will be prefixed with 'bsext-obj-' automatically"
+     ]
+   },
+   
+diff --git a/package b/package
+index fa7958d..9ceb915 100755
+--- a/package
++++ b/package
+@@ -1,6 +1,6 @@
+ #!/bin/bash
+ 
+-# BrightSign YOLO Object Detection - Package Creation Script
++# BrightSign Object Detection - Package Creation Script
+ # Creates both development and extension packages with multi-SOC support
+ 
+ set -e
+@@ -46,8 +46,8 @@ success() {
+ 
+ # Configuration
+ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+-DEVELOPMENT_PACKAGE="yolo-dev-${TIMESTAMP}.zip"
+-EXTENSION_PACKAGE="yolo-ext-${TIMESTAMP}.zip"
++DEVELOPMENT_PACKAGE="objdet-dev-${TIMESTAMP}.zip"
++EXTENSION_PACKAGE="objdet-ext-${TIMESTAMP}.zip"
+ 
+ # Supported SOCs and their mappings
+ declare -A SOC_PLATFORMS=(
+@@ -58,7 +58,7 @@ declare -A SOC_PLATFORMS=(
+ 
+ usage() {
+     echo "Usage: $0 [OPTIONS]"
+-    echo "Package BrightSign YOLO Object Detection extension for deployment"
++    echo "Package BrightSign Object Detection extension for deployment"
+     echo ""
+     echo "Options:"
+     echo "  -d, --dev-only     Create development package only"
+@@ -66,7 +66,7 @@ usage() {
+     echo "  -c, --clean        Clean install directory before packaging"
+     echo "  -v, --verify       Run validation after packaging"
+     echo "  --soc SOC          Package specific SOC only (RK3588, RK3576, RK3568)"
+-    echo "  --model MODEL      Include specific model only (yolov8, yolox, all)"
++    echo "  --model MODEL      Include specific model only (yolox)"
+     echo "  -h, --help         Show this help message"
+     echo ""
+     echo "Package types:"
+@@ -79,9 +79,7 @@ usage() {
+     echo "  RK3568  -> LS-5 players (LS445)"
+     echo ""
+     echo "Model Support:"
+-    echo "  yolov8  -> YOLOv8 nano model (YOLO Simplified)"
+-    echo "  yolox   -> YOLOX small model"
+-    echo "  all     -> Both models (default)"
++    echo "  yolox   -> YOLOX small model (default and only supported model)"
+ }
+ 
+ # Parse command line arguments
+@@ -90,7 +88,7 @@ EXT_ONLY=false
+ CLEAN=false
+ VERIFY=false
+ SPECIFIC_SOC=""
+-SPECIFIC_MODEL="all"
++SPECIFIC_MODEL="yolox"
+ 
+ while [[ $# -gt 0 ]]; do
+     case $1 in
+@@ -119,8 +117,8 @@ while [[ $# -gt 0 ]]; do
+             ;;
+         --model)
+             SPECIFIC_MODEL="$2"
+-            if [[ ! "${SPECIFIC_MODEL}" =~ ^(yolov8|yolox|all)$ ]]; then
+-                error "Invalid model: $SPECIFIC_MODEL. Must be yolov8, yolox, or all"
++            if [[ ! "${SPECIFIC_MODEL}" =~ ^(yolox)$ ]]; then
++                error "Invalid model: $SPECIFIC_MODEL. Must be yolox"
+             fi
+             shift 2
+             ;;
+@@ -148,7 +146,7 @@ check_prerequisites() {
+         fi
+         
+         local build_dir="build_${SOC_PLATFORMS[$soc],,}"
+-        if [[ -f "$build_dir/yolo_demo" ]]; then
++        if [[ -f "$build_dir/object_detection_demo" ]]; then
+             found_binaries=true
+             break
+         fi
+@@ -166,15 +164,9 @@ check_prerequisites() {
+         fi
+         
+         local install_dir="install/$soc"
+-        if [[ -d "$install_dir/model" ]]; then
+-            if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolov8" ]] && [[ -f "$install_dir/model/yolov8n.rknn" ]]; then
+-                found_models=true
+-                break
+-            fi
+-            if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolox" ]] && [[ -f "$install_dir/model/yolox_s.rknn" ]]; then
+-                found_models=true
+-                break
+-            fi
++        if [[ -d "$install_dir/model" ]] && [[ -f "$install_dir/model/yolox_s.rknn" ]]; then
++            found_models=true
++            break
+         fi
+     done
+ 
+@@ -241,9 +233,9 @@ copy_binaries() {
+         fi
+ 
+         # Copy main binary
+-        if [[ -f "$build_dir/yolo_demo" ]]; then
+-            cp "$build_dir/yolo_demo" "$package_soc_dir/"
+-            chmod +x "$package_soc_dir/yolo_demo"
++        if [[ -f "$build_dir/object_detection_demo" ]]; then
++            cp "$build_dir/object_detection_demo" "$package_soc_dir/"
++            chmod +x "$package_soc_dir/object_detection_demo"
+         else
+             warn "Binary not found in $build_dir, skipping $soc"
+             continue
+@@ -285,19 +277,10 @@ copy_models() {
+ 
+         mkdir -p "$package_soc_dir/model"
+ 
+-        # Copy models based on selection
+-        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolov8" ]]; then
+-            if [[ -f "$install_dir/model/yolov8n.rknn" ]]; then
+-                cp "$install_dir/model/yolov8n.rknn" "$package_soc_dir/model/"
+-                log "Copied YOLOv8 model for $soc"
+-            fi
+-        fi
+-
+-        if [[ "$SPECIFIC_MODEL" == "all" || "$SPECIFIC_MODEL" == "yolox" ]]; then
+-            if [[ -f "$install_dir/model/yolox_s.rknn" ]]; then
+-                cp "$install_dir/model/yolox_s.rknn" "$package_soc_dir/model/"
+-                log "Copied YOLOX model for $soc"
+-            fi
++        # Copy YOLOX model
++        if [[ -f "$install_dir/model/yolox_s.rknn" ]]; then
++            cp "$install_dir/model/yolox_s.rknn" "$package_soc_dir/model/"
++            log "Copied YOLOX model for $soc"
+         fi
+ 
+         # Always copy labels file
+@@ -543,8 +526,8 @@ verify_package() {
+         fi
+ 
+         # Check for binary
+-        if [[ ! -f "$soc_dir/yolo_demo" ]]; then
+-            warn "Missing binary: $soc_dir/yolo_demo"
++        if [[ ! -f "$soc_dir/object_detection_demo" ]]; then
++            warn "Missing binary: $soc_dir/object_detection_demo"
+             errors=$((errors + 1))
+         else
+             total_files=$((total_files + 1))
+@@ -689,11 +672,11 @@ validate_platform_consistency() {
+         fi
+         
+         # Validate binary exists and is executable
+-        if [[ ! -f "$soc_dir/yolo_demo" ]]; then
+-            warn "Missing binary for $soc: $soc_dir/yolo_demo"
++        if [[ ! -f "$soc_dir/object_detection_demo" ]]; then
++            warn "Missing binary for $soc: $soc_dir/object_detection_demo"
+             ((errors++))
+-        elif [[ ! -x "$soc_dir/yolo_demo" ]]; then
+-            warn "Binary not executable for $soc: $soc_dir/yolo_demo"
++        elif [[ ! -x "$soc_dir/object_detection_demo" ]]; then
++            warn "Binary not executable for $soc: $soc_dir/object_detection_demo"
+             ((errors++))
+         fi
+         
+index 393d39a..aea5086 100755
+--- a/scripts/runall.sh
++++ b/scripts/runall.sh
+@@ -1,6 +1,6 @@
+ #!/bin/bash
+ 
+-# BrightSign YOLO Object Detection - Complete Build Script
++# BrightSign Object Detection - Complete Build Script
+ # Runs all steps from Quick Start guide in sequence
+ 
+ set -e
+@@ -29,10 +29,6 @@ SKIP_SDK_INSTALL=false
+ SKIP_APPS=false
+ SKIP_PACKAGE=false
+ VERBOSE=false
+-CLEAN_MODE=false
+-FORCE_MODELS=false
+-FORCE_SDK_BUILD=false
+-FORCE_SDK_INSTALL=false
+ 
+ # Track timing
+ START_TIME=$(date +%s)
+@@ -44,7 +40,7 @@ export project_root="${PROJECT_ROOT}"
+ 
+ usage() {
+     echo "Usage: $0 [OPTIONS]"
+-    echo "Run complete BrightSign YOLO Object Detection build pipeline"
++    echo "Run complete BrightSign Object Detection build pipeline"
+     echo ""
+     echo "This script automates all Quick Start steps:"
+     echo "  1. Setup environment (5-10 minutes)"
+@@ -58,7 +54,6 @@ usage() {
+     echo ""
+     echo "Options:"
+     echo "  -auto, --auto          Run all steps without prompting for confirmation"
+-    echo "  -c, --clean            Clean all build artifacts and temporary files"
+     echo "  --skip-arch-check      Skip x86_64 architecture check (for testing)"
+     echo "  --skip-setup           Skip setup step (if already done)"
+     echo "  --skip-models          Skip model compilation (if already done)"
+@@ -69,20 +64,14 @@ usage() {
+     echo "  --from-step N          Start from step N (1-6)"
+     echo "  --to-step N            Stop after step N (1-6)"
+     echo "  --verbose              Show detailed output"
+-    echo "  --force-models         Force model compilation even if already built"
+-    echo "  --force-sdk-build      Force SDK build even if installer exists"
+-    echo "  --force-sdk-install    Force SDK installation even if already installed"
+     echo "  -h, --help             Show this help message"
+     echo ""
+     echo "Examples:"
+     echo "  $0                     # Run all steps interactively"
+     echo "  $0 -auto               # Run all steps automatically"
+-    echo "  $0 --clean             # Clean all build artifacts"
+     echo "  $0 --skip-setup        # Skip setup if already done"
+     echo "  $0 --from-step 5       # Start from building apps"
+     echo "  $0 --to-step 4         # Stop after SDK install"
+-    echo "  $0 --force-models      # Force rebuild models even if they exist"
+-    echo "  $0 --force-sdk-build   # Force rebuild SDK even if installer exists"
+ }
+ 
+ # Parse command line arguments
+@@ -92,7 +81,6 @@ TO_STEP=6
+ while [[ "$#" -gt 0 ]]; do
+     case $1 in
+         -auto|--auto) AUTO_MODE=true; shift ;;
+-        -c|--clean) CLEAN_MODE=true; shift ;;
+         --skip-arch-check) SKIP_ARCH_CHECK=true; shift ;;
+         --skip-setup) SKIP_SETUP=true; shift ;;
+         --skip-models) SKIP_MODELS=true; shift ;;
+@@ -100,9 +88,6 @@ while [[ "$#" -gt 0 ]]; do
+         --skip-sdk-install) SKIP_SDK_INSTALL=true; shift ;;
+         --skip-apps) SKIP_APPS=true; shift ;;
+         --skip-package) SKIP_PACKAGE=true; shift ;;
+-        --force-models) FORCE_MODELS=true; shift ;;
+-        --force-sdk-build) FORCE_SDK_BUILD=true; shift ;;
+-        --force-sdk-install) FORCE_SDK_INSTALL=true; shift ;;
+         --from-step) FROM_STEP="$2"; shift 2 ;;
+         --to-step) TO_STEP="$2"; shift 2 ;;
+         --verbose) VERBOSE=true; shift ;;
+@@ -183,154 +168,6 @@ check_docker_running() {
+     fi
+ }
+ 
+-# Function to clean build artifacts and temporary files
+-clean_build_artifacts() {
+-    echo -e "${BOLD}${CYAN}════════════════════════════════════════════════════════════════════${NC}"
+-    echo -e "${BOLD}${CYAN}  Cleaning Build Artifacts${NC}"
+-    echo -e "${BOLD}${CYAN}════════════════════════════════════════════════════════════════════${NC}"
+-    echo ""
+-    
+-    # Pre-cleanup: Handle special cases that need permission fixes
+-    log "Preparing directories for removal..."
+-    
+-    # Handle OpenEmbedded build artifacts that might have restrictive permissions
+-    for oe_dir in "brightsign-oe"; do
+-        if [[ -d "$oe_dir" ]]; then
+-            if [[ "$VERBOSE" == true ]]; then
+-                log "  Fixing permissions in $oe_dir..."
+-            fi
+-            # Make everything writable so we can remove it
+-            find "$oe_dir" -type d -exec chmod 755 {} + 2>/dev/null || true
+-            find "$oe_dir" -type f -exec chmod 644 {} + 2>/dev/null || true
+-        fi
+-    done
+-    
+-    local items_to_clean=(
+-        "build_firebird/"
+-        "build_ls5/"
+-        "build_xt5/"
+-        "sdk/"
+-        "install/"
+-        "yolo-*.zip"
+-        "brightsign-x86_64-cobra-toolchain-*.sh"
+-        "bsoe-recipes/build/"
+-        "bsoe-recipes/downloads/"
+-        "bsoe-recipes/sstate-cache/"
+-        "brightsign-oe/"
+-    )
+-    
+-    local cleaned_count=0
+-    local total_size_mb=0
+-    
+-    # Calculate approximate total size before cleaning
+-    for item in "${items_to_clean[@]}"; do
+-        if ls $item >/dev/null 2>&1; then
+-            # Use du to get size in MB, fallback to simple count if du fails
+-            size_kb=$(du -sk $item 2>/dev/null | cut -f1 | head -n1)
+-            if [[ -n "$size_kb" && "$size_kb" =~ ^[0-9]+$ ]]; then
+-                size_mb=$((size_kb / 1024))
+-                total_size_mb=$((total_size_mb + size_mb))
+-            fi
+-        fi
+-    done
+-    
+-    if [[ $total_size_mb -gt 0 ]]; then
+-        log "Found approximately ${total_size_mb}MB of build artifacts"
+-    else
+-        log "Scanning for build artifacts..."
+-    fi
+-    echo ""
+-    
+-    for item in "${items_to_clean[@]}"; do
+-        if ls $item >/dev/null 2>&1; then
+-            log "Removing $item..."
+-            if rm -rf $item 2>/dev/null; then
+-                cleaned_count=$((cleaned_count + 1))
+-            else
+-                # If removal failed, try with permission changes
+-                if [[ "$VERBOSE" == true ]]; then
+-                    log "  Retrying with permission fix..."
+-                fi
+-                chmod -R 777 "$item" 2>/dev/null || true
+-                if rm -rf $item 2>/dev/null; then
+-                    cleaned_count=$((cleaned_count + 1))
+-                else
+-                    warn "Could not completely remove $item (some files may remain)"
+-                    cleaned_count=$((cleaned_count + 1))  # Still count as attempted
+-                fi
+-            fi
+-        else
+-            if [[ "$VERBOSE" == true ]]; then
+-                log "Not found: $item (skipping)"
+-            fi
+-        fi
+-    done
+-    
+-    # Clean any RKNN model files that might have been generated
+-    if [[ -f "compile-models" && -x "compile-models" ]]; then
+-        log "Cleaning compiled RKNN models..."
+-        find . -name "*.rknn" -type f -delete 2>/dev/null || true
+-    fi
+-    
+-    # Clean Docker artifacts related to the project
+-    log "Cleaning Docker artifacts..."
+-    if command_exists docker; then
+-        # Remove dangling images and containers
+-        docker container prune -f >/dev/null 2>&1 || true
+-        docker image prune -f >/dev/null 2>&1 || true
+-        # Remove project-specific images if they exist
+-        docker rmi -f $(docker images -q --filter "reference=*yolo*" --filter "reference=*brightsign*") >/dev/null 2>&1 || true
+-    fi
+-    
+-    # Remove any temporary and log files
+-    log "Cleaning temporary files..."
+-    find . -name "*.tmp" -type f -delete 2>/dev/null || true
+-    find . -name "*.log" -type f -delete 2>/dev/null || true
+-    find . -name "core.*" -type f -delete 2>/dev/null || true
+-    find . -name "*.pyc" -type f -delete 2>/dev/null || true
+-    find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+-    
+-    # Clean CMake build artifacts
+-    find . -name "CMakeCache.txt" -type f -delete 2>/dev/null || true
+-    find . -name "CMakeFiles" -type d -exec rm -rf {} + 2>/dev/null || true
+-    find . -name "cmake_install.cmake" -type f -delete 2>/dev/null || true
+-    find . -name "Makefile" -type f -not -path "./bsoe-recipes/*" -delete 2>/dev/null || true
+-    
+-    echo ""
+-    if [[ $cleaned_count -gt 0 ]]; then
+-        success "Cleaned $cleaned_count build artifact directories"
+-        if [[ $total_size_mb -gt 0 ]]; then
+-            success "Freed approximately ${total_size_mb}MB of disk space"
+-        fi
+-    else
+-        log "No major build artifacts found to clean"
+-    fi
+-    
+-    echo ""
+-    success "Clean operation completed successfully"
+-    log "You can now run a fresh build with './scripts/runall.sh'"
+-    
+-    # Check if any problematic directories still exist
+-    local remaining_dirs=()
+-    for dir in "brightsign-oe" "bsoe-recipes/build"; do
+-        if [[ -d "$dir" ]]; then
+-            remaining_dirs+=("$dir")
+-        fi
+-    done
+-    
+-    if [[ ${#remaining_dirs[@]} -gt 0 ]]; then
+-        echo ""
+-        warn "Some OpenEmbedded build directories may still exist:"
+-        for dir in "${remaining_dirs[@]}"; do
+-            echo "  - $dir"
+-        done
+-        echo ""
+-        echo "If you encounter 'Directory not empty' errors, you can manually clean with:"
+-        echo "  sudo rm -rf ${remaining_dirs[*]}"
+-        echo "  (This is sometimes needed due to OpenEmbedded build system permissions)"
+-    fi
+-}
+-
+ step_header() {
+     local step_num="$1"
+     local step_name="$2"
+@@ -375,14 +212,14 @@ print_summary() {
+     
+     echo ""
+     echo "Extension packages created:"
+-    ls -lh yolo-*.zip 2>/dev/null | while read line; do
++    ls -lh objdet-*.zip 2>/dev/null | while read line; do
+         echo "  $line"
+     done
+     
+     echo ""
+     echo "Next steps:"
+     echo "1. Transfer package to BrightSign player"
+-    echo "2. Install: bash ./ext_npu_yolo_install-lvm.sh && reboot"
++    echo "2. Install: bash ./ext_npu_obj_install-lvm.sh && reboot"
+     echo "3. Extension will auto-start with USB camera"
+ }
+ 
+@@ -454,16 +291,10 @@ check_prerequisites() {
+ # Main execution
+ main() {
+     echo -e "${BOLD}${MAGENTA}╔══════════════════════════════════════════════════════════════════╗${NC}"
+-    echo -e "${BOLD}${MAGENTA}║     BrightSign YOLO Object Detection - Complete Build Pipeline    ║${NC}"
++    echo -e "${BOLD}${MAGENTA}║     BrightSign Object Detection - Complete Build Pipeline        ║${NC}"
+     echo -e "${BOLD}${MAGENTA}╚══════════════════════════════════════════════════════════════════╝${NC}"
+     echo ""
+     
+-    # Handle clean mode
+-    if [ "$CLEAN_MODE" = true ]; then
+-        clean_build_artifacts
+-        exit 0
+-    fi
+-    
+     if [ "$AUTO_MODE" = true ]; then
+         log "Running in automatic mode - no prompts"
+     else
+@@ -522,31 +353,19 @@ main() {
+         if [[ "$SKIP_MODELS" == true ]]; then
+             log "Skipping model compilation (--skip-models flag)"
+         else
+-            # Check if models are already compiled (unless forced)
+-            if [[ "$FORCE_MODELS" == true ]]; then
+-                log "Force rebuilding models (--force-models flag)"
+-                step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
+-            elif [[ -f "install/RK3568/model/yolov8n.rknn" && -f "install/RK3576/model/yolov8n.rknn" && -f "install/RK3588/model/yolov8n.rknn" ]]; then
+-                log "RKNN models already compiled for all platforms"
+-                log "Skipping model compilation (already completed)"
+-            else
+-                step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
+-            fi
++            step_header "2/6" "Compile ONNX Models to RKNN" "3-5 minutes"
+             
+-            # Compile models if we need to (either not built or forced)
+-            if [[ "$FORCE_MODELS" == true ]] || [[ ! -f "install/RK3568/model/yolov8n.rknn" || ! -f "install/RK3576/model/yolov8n.rknn" || ! -f "install/RK3588/model/yolov8n.rknn" ]]; then
+-                if [[ "$VERBOSE" == true ]]; then
+-                    log "Running compile-models in verbose mode..."
+-                    ./compile-models || error "Model compilation failed"
+-                else
+-                    log "Running compile-models in quiet mode..."
+-                    if ! ./compile-models --quiet; then
+-                        error "Model compilation failed. Try running with --verbose for more details."
+-                    fi
++            if [[ "$VERBOSE" == true ]]; then
++                log "Running compile-models in verbose mode..."
++                ./compile-models || error "Model compilation failed"
++            else
++                log "Running compile-models in quiet mode..."
++                if ! ./compile-models --quiet; then
++                    error "Model compilation failed. Try running with --verbose for more details."
+                 fi
+-                
+-                step_footer "Model compilation"
+             fi
++            
++            step_footer "Model compilation"
+         fi
+     fi
+     
+@@ -556,33 +375,20 @@ main() {
+         if [[ "$SKIP_SDK_BUILD" == true ]]; then
+             log "Skipping SDK build (--skip-sdk-build flag)"
+         else
+-            # Check if SDK installer already exists (unless forced)
+-            SDK_INSTALLER_CHECK=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
+-            if [[ "$FORCE_SDK_BUILD" == true ]]; then
+-                log "Force rebuilding SDK (--force-sdk-build flag)"
+-                step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
+-            elif [[ -n "$SDK_INSTALLER_CHECK" ]]; then
+-                log "SDK installer already exists: $SDK_INSTALLER_CHECK"
+-                log "Skipping SDK build (already completed)"
+-            else
+-                step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
+-            fi
++            step_header "3/6" "Build OpenEmbedded SDK" "30-45 minutes"
+             
+-            # Build SDK if we need to (either not built or forced)
+-            if [[ "$FORCE_SDK_BUILD" == true ]] || [[ -z "$SDK_INSTALLER_CHECK" ]]; then
+-                log "This is the longest step. Building BrightSign OS SDK..."
+-                log "The build will download ~20GB and compile the SDK"
+-                
+-                if [[ "$VERBOSE" == true ]]; then
+-                    ./build --extract-sdk || error "SDK build failed"
+-                else
+-                    if ! ./build --extract-sdk > /dev/null 2>&1; then
+-                        error "SDK build failed"
+-                    fi
++            log "This is the longest step. Building BrightSign OS SDK..."
++            log "The build will download ~20GB and compile the SDK"
++            
++            if [[ "$VERBOSE" == true ]]; then
++                ./build --extract-sdk || error "SDK build failed"
++            else
++                if ! ./build --extract-sdk > /dev/null 2>&1; then
++                    error "SDK build failed"
+                 fi
+-                
+-                step_footer "SDK build"
+             fi
++            
++            step_footer "SDK build"
+         fi
+     fi
+     
+@@ -592,31 +398,19 @@ main() {
+         if [[ "$SKIP_SDK_INSTALL" == true ]]; then
+             log "Skipping SDK installation (--skip-sdk-install flag)"
+         else
+-            # Check if SDK is already installed (unless forced)
+-            if [[ "$FORCE_SDK_INSTALL" == true ]]; then
+-                log "Force reinstalling SDK (--force-sdk-install flag)"
+-                step_header "4/6" "Install SDK" "1 minute"
+-            elif [[ -d "./sdk" && -f "./sdk/environment-setup-aarch64-oe-linux" ]]; then
+-                log "SDK already installed in ./sdk/"
+-                log "Skipping SDK installation (already completed)"
+-            else
+-                step_header "4/6" "Install SDK" "1 minute"
+-            fi
++            step_header "4/6" "Install SDK" "1 minute"
+             
+-            # Install SDK if we need to (either not installed or forced)
+-            if [[ "$FORCE_SDK_INSTALL" == true ]] || [[ ! -d "./sdk" || ! -f "./sdk/environment-setup-aarch64-oe-linux" ]]; then
+-                # Find the SDK installer
+-                SDK_INSTALLER=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
+-                
+-                if [[ -z "$SDK_INSTALLER" ]]; then
+-                    error "SDK installer not found. Please run build step first."
+-                fi
+-                
+-                log "Installing SDK from $SDK_INSTALLER..."
+-                ./"$SDK_INSTALLER" -d ./sdk -y || error "SDK installation failed"
+-                
+-                step_footer "SDK installation"
++            # Find the SDK installer
++            SDK_INSTALLER=$(ls brightsign-x86_64-cobra-toolchain-*.sh 2>/dev/null | head -n 1)
++            
++            if [[ -z "$SDK_INSTALLER" ]]; then
++                error "SDK installer not found. Please run build step first."
+             fi
++            
++            log "Installing SDK from $SDK_INSTALLER..."
++            ./"$SDK_INSTALLER" -d ./sdk -y || error "SDK installation failed"
++            
++            step_footer "SDK installation"
+         fi
+     fi
+     
+@@ -663,4 +457,4 @@ main() {
+ trap 'echo -e "\n${RED}Build interrupted by user${NC}"; exit 130' INT TERM
+ 
+ # Run main function
+-main "$@"
++main "$@"
+\ No newline at end of file
+diff --git a/setup b/setup
+index db65cd7..556a491 100755
+--- a/setup
++++ b/setup
+@@ -1,6 +1,6 @@
+ #!/bin/bash
+ 
+-# BrightSign YOLO Object Detection - Setup Script
++# BrightSign Object Detection - Setup Script
+ # Creates bsoe-build Docker environment with BrightSign OS sources
+ 
+ set -e
+@@ -13,7 +13,7 @@ BRIGHTSIGN_OS_MINOR_VERSION=${BRIGHTSIGN_OS_MINOR_VERSION:-52}
+ 
+ usage() {
+     echo "Usage: $0 [OPTIONS]"
+-    echo "Setup complete BrightSign YOLO Object Detection build environment with RKNN toolkit, models, and containers"
++    echo "Setup complete BrightSign Object Detection build environment with RKNN toolkit, models, and containers"
+     echo ""
+     echo "Options:"
+     echo "  -y, --yes              Skip confirmation prompt"
+@@ -267,34 +267,6 @@ clone_rknn_toolkit() {
+     # Download ONNX models
+     log "Downloading ONNX models..."
+     
+-    # Download YOLO Simplified model
+-    cd "${SCRIPT_DIR}"
+-    log "Checking YOLOv8 model..."
+-    mkdir -p toolkit/rknn_model_zoo/examples/yolov8/model/RK3588
+-    if [[ -d "toolkit/rknn_model_zoo/examples/yolov8/model" ]]; then
+-        pushd toolkit/rknn_model_zoo/examples/yolov8/model > /dev/null
+-        
+-        # Check if model already exists and is valid
+-        if check_model_file "yolov8n.onnx" 10 && [[ "$FORCE_DOWNLOAD" != true ]]; then
+-            log "YOLOv8 model already exists ($(stat -c%s yolov8n.onnx 2>/dev/null || stat -f%z yolov8n.onnx 2>/dev/null | numfmt --to=iec-i --suffix=B 2>/dev/null || echo 'size unknown')), skipping download"
+-        else
+-            if [[ "$FORCE_DOWNLOAD" == true ]]; then
+-                log "Force downloading YOLOv8 model..."
+-            else
+-                log "Downloading YOLOv8 model..."
+-            fi
+-            
+-            if [[ -f "download_model.sh" ]]; then
+-                chmod +x ./download_model.sh
+-                ./download_model.sh || warn "Failed to download YOLOv8 model"
+-            else
+-                warn "YOLOv8 download_model.sh not found"
+-            fi
+-        fi
+-        
+-        popd > /dev/null
+-    fi
+-    
+     # Download YOLOX model  
+     cd "${SCRIPT_DIR}"
+     log "Checking YOLOX model..."
+@@ -346,12 +318,12 @@ clone_rknn_toolkit() {
+ 
+ # Main setup function
+ main() {
+-    echo "BrightSign YOLO Object Detection - Setup Script"
++    echo "BrightSign Object Detection - Setup Script"
+     echo "==============================================="
+     echo "This script will:"
+     echo "1. Check prerequisites"
+     echo "2. Clone RKNN toolkit and model zoo repositories"
+-    echo "3. Download ONNX models (YOLOv8n, YOLOX-s) if not present"
++    echo "3. Download ONNX model (YOLOX-s) if not present"
+     echo "4. Build rknn_tk2 Docker container for model compilation"
+     echo "5. Setup Docker build environment (bsoe-build)"
+     echo "6. Download BrightSign OS source (~20GB) inside Docker container"
+diff --git a/sh/make-extension-lvm b/sh/make-extension-lvm
+index e8afc95..30d0190 100755
+--- a/sh/make-extension-lvm
++++ b/sh/make-extension-lvm
+@@ -1,7 +1,7 @@
+ #!/bin/bash
+ set -e
+ 
+-name=npu_yolo
++name=npu_obj
+ mapper_vol_name=ext_${name}
+ tmp_vol_name=tmp_${name}
+ mount_name=ext_${name}
+diff --git a/sh/rollback-extension.sh b/sh/rollback-extension.sh
+index 39fb8fa..371d0b4 100755
+--- a/sh/rollback-extension.sh
++++ b/sh/rollback-extension.sh
+@@ -49,10 +49,10 @@ usage() {
+     echo "  -h, --help          Show this help message"
+     echo ""
+     echo "Examples:"
+-    echo "  $0 npu_yolo                              # Rollback to latest backup"
+-    echo "  $0 --list-backups npu_yolo              # List available backups"
+-    echo "  $0 --backup backup_20250201 npu_yolo    # Rollback to specific backup"
+-    echo "  $0 --dry-run npu_yolo                   # Test rollback capability"
++    echo "  $0 npu_obj                              # Rollback to latest backup"
++    echo "  $0 --list-backups npu_obj              # List available backups"
++    echo "  $0 --backup backup_20250201 npu_obj    # Rollback to specific backup"
++    echo "  $0 --dry-run npu_obj                   # Test rollback capability"
+ }
+ 
+ # Parse command line arguments
+@@ -266,8 +266,8 @@ stop_extension() {
+     
+     # Method 3: kill processes
+     case "$extension_name" in
+-        *yolo*)
+-            pkill -f "yolo_demo" 2>/dev/null || true
++        *obj*|*objdet*)
++            pkill -f "object_detection_demo" 2>/dev/null || true
+             ;;
+         *)
+             vlog "No specific process kill pattern for $extension_name"
+diff --git a/sh/setup_python_env b/sh/setup_python_env
+index d8393fc..3d3e9d6 100755
+--- a/sh/setup_python_env
++++ b/sh/setup_python_env
+@@ -1,14 +1,14 @@
+ #!/bin/bash
+ 
+-# Setup environment for BrightSign YOLO Object Detection
++# Setup environment for BrightSign Object Detection
+ # This script sets up the build environment for development
+ 
+ # Detect if running on BrightSign player or development host
+ if [ -f "/etc/brightsign-version" ]; then
+     echo "Detected BrightSign player environment"
+     # On player, set up extension paths
+-    export PATH="/var/volatile/bsext/ext_npu_yolo/usr/bin:$PATH"
+-    export LD_LIBRARY_PATH="/var/volatile/bsext/ext_npu_yolo/usr/lib:$LD_LIBRARY_PATH"
++    export PATH="/var/volatile/bsext/ext_npu_obj/usr/bin:$PATH"
++    export LD_LIBRARY_PATH="/var/volatile/bsext/ext_npu_obj/usr/lib:$LD_LIBRARY_PATH"
+     
+     # If Python extension is available
+     if [ -d "/var/volatile/bsext/ext_pydev" ]; then
+diff --git a/sh/uninstall.sh b/sh/uninstall.sh
+index fc8885d..5d45f36 100644
+--- a/sh/uninstall.sh
++++ b/sh/uninstall.sh
+@@ -1,23 +1,23 @@
+ #!/bin/bash
+ 
+ # stop the extension
+-/var/volatile/bsext/ext_npu_yolo/bsext_init stop
++/var/volatile/bsext/ext_npu_obj/bsext_init stop
+ 
+ # check that all the processes are stopped
+-# ps | grep bsext_npu_yolo
++# ps | grep bsext_npu_obj
+ 
+ # unmount the extension
+-umount /var/volatile/bsext/ext_npu_yolo
++umount /var/volatile/bsext/ext_npu_obj
+ # remove the extension
+-rm -rf /var/volatile/bsext/ext_npu_yolo
++rm -rf /var/volatile/bsext/ext_npu_obj
+ 
+ # remove the extension from the system
+-# lvremove --yes /dev/mapper/ext_npu_yolo
++# lvremove --yes /dev/mapper/ext_npu_obj
+ # if that path does not exist, you can try
+-lvremove --yes /dev/mapper/bsos-ext_npu_yolo
++lvremove --yes /dev/mapper/bsos-ext_npu_obj
+ 
+-# rm -rf /dev/mapper/bsext_npu_yolo
+-rm -rf /dev/mapper/bsos-ext_npu_yolo
++# rm -rf /dev/mapper/bsext_npu_obj
++rm -rf /dev/mapper/bsos-ext_npu_obj
+ 
+ # reboot
+ echo "Uninstallation complete. Please reboot your device to finalize the changes."
+\ No newline at end of file
+diff --git a/sh/update-extension.sh b/sh/update-extension.sh
+index 3d45947..8fc06f0 100755
+--- a/sh/update-extension.sh
++++ b/sh/update-extension.sh
+@@ -48,9 +48,9 @@ usage() {
+     echo "  -h, --help        Show this help message"
+     echo ""
+     echo "Examples:"
+-    echo "  $0 yolo-ext-20250201-123456.zip"
+-    echo "  $0 --force --no-backup yolo-ext-20250201-123456.zip"
+-    echo "  $0 --dry-run yolo-ext-20250201-123456.zip"
++    echo "  $0 objdet-ext-20250201-123456.zip"
++    echo "  $0 --force --no-backup objdet-ext-20250201-123456.zip"
++    echo "  $0 --dry-run objdet-ext-20250201-123456.zip"
+ }
+ 
+ # Parse command line arguments
+@@ -303,7 +303,7 @@ backup_configuration() {
+     fi
+     
+     # Backup user data directories if they exist
+-    local data_dirs=("/tmp/yolo_output" "/var/log/bsext-yolo")
++    local data_dirs=("/tmp/objdet_output" "/var/log/bsext-obj")
+     for data_dir in "${data_dirs[@]}"; do
+         if [[ -d "$data_dir" ]]; then
+             local backup_name=$(basename "$data_dir")
+@@ -320,17 +320,17 @@ stop_extension() {
+     log "Stopping current extension..."
+     
+     # Try to stop via bsext_init if it exists
+-    if [[ -f "/usr/local/yolo/bsext_init" ]]; then
+-        /usr/local/yolo/bsext_init stop 2>/dev/null || true
++    if [[ -f "/usr/local/obj/bsext_init" ]]; then
++        /usr/local/obj/bsext_init stop 2>/dev/null || true
+     fi
+     
+     # Also try system service approach
+     if command -v systemctl >/dev/null 2>&1; then
+-        systemctl stop bsext-yolo 2>/dev/null || true
++        systemctl stop bsext-obj 2>/dev/null || true
+     fi
+     
+     # Kill any remaining processes
+-    pkill -f "yolo_demo" 2>/dev/null || true
++    pkill -f "object_detection_demo" 2>/dev/null || true
+     
+     success "Extension stopped"
+ }
+@@ -398,7 +398,7 @@ restore_configuration() {
+     fi
+     
+     # Restore user data directories
+-    local data_dirs=("yolo_output" "bsext-yolo")
++    local data_dirs=("objdet_output" "bsext-obj")
+     for data_dir in "${data_dirs[@]}"; do
+         local backup_path="$backup_dir/$data_dir"
+         local restore_path="/tmp/$data_dir"
+@@ -422,11 +422,11 @@ start_extension() {
+     log "Starting updated extension..."
+     
+     # Try to start via bsext_init if it exists
+-    if [[ -f "/usr/local/yolo/bsext_init" ]]; then
++    if [[ -f "/usr/local/obj/bsext_init" ]]; then
+         if [[ "$DRY_RUN" == "true" ]]; then
+             log "DRY RUN: Would start extension via bsext_init"
+         else
+-            /usr/local/yolo/bsext_init start
++            /usr/local/obj/bsext_init start
+             success "Extension started successfully"
+         fi
+     else
+diff --git a/src/inference.cpp b/src/inference.cpp
+index 93049ae..21c94ad 100644
+--- a/src/inference.cpp
++++ b/src/inference.cpp
+@@ -3,7 +3,7 @@
+ #include <thread>
+ 
+ #include "inference.h"
+-#include "yolo.h"
++#include "yolox.h"
+ #include "postprocess.h"
+ 
+ 
+@@ -60,13 +60,13 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
+     memset(&empty_results, 0, sizeof(empty_results));
+     InferenceResult final_result{empty_results, std::chrono::system_clock::now(), selected_classes, class_mapping, confidence_threshold};
+ 
+-    printf("calling inference_yolo_model\n");
++    printf("calling inference_yolox_model\n");
+     object_detect_result_list results;
+     memset(&results, 0, sizeof(results));  // Initialize results to avoid uninitialized data
+     
+-    int ret = inference_yolo_model(rknn_app_ctx.get(), &image, &results, confidence_threshold);
++    int ret = inference_yolox_model(rknn_app_ctx.get(), &image, &results, confidence_threshold);
+     if (ret != 0) {
+-        printf("inference_yolo_model fail! ret=%d\n", ret);
++        printf("inference_yolox_model fail! ret=%d\n", ret);
+         return final_result;
+     }
+ 
+@@ -76,7 +76,7 @@ InferenceResult MLInferenceThread::runInference(cv::Mat& cap) {
+     final_result.selected_classes = selected_classes;  // Pass selected classes along
+     final_result.class_mapping = class_mapping;  // Pass class mapping along
+     final_result.confidence_threshold = confidence_threshold;  // Pass confidence threshold along
+-    printf("inference_yolo_model success! count=%d\n", results.count);
++    printf("inference_yolox_model success! count=%d\n", results.count);
+ 
+     frames++;
+     printf("Processed frame %d\n", frames);
+@@ -105,9 +105,9 @@ MLInferenceThread::MLInferenceThread(
+     // Create and initialize the model with dynamic allocation
+     rknn_app_ctx = std::make_unique<rknn_app_context_t>();
+     memset(rknn_app_ctx.get(), 0, sizeof(rknn_app_context_t));
+-    auto ret = init_yolo_model(model_path, rknn_app_ctx.get());
++    auto ret = init_yolox_model(model_path, rknn_app_ctx.get());
+        if (ret != 0) {
+-        printf("init_yolo_model fail! ret=%d model_path=%s\n", ret, model_path);
++        printf("init_yolox_model fail! ret=%d model_path=%s\n", ret, model_path);
+         // return -1;
+     }
+ 
+@@ -116,9 +116,9 @@ MLInferenceThread::MLInferenceThread(
+ 
+ MLInferenceThread::~MLInferenceThread() {
+     if (rknn_app_ctx) {
+-        auto ret = release_yolo_model(rknn_app_ctx.get());
++        auto ret = release_yolox_model(rknn_app_ctx.get());
+         if (ret != 0) {
+-            printf("release_yolo_model fail! ret=%d\n", ret);
++            printf("release_yolox_model fail! ret=%d\n", ret);
+         }  
+     }
+ 
+diff --git a/src/main.cpp b/src/main.cpp
+index a8b9c6f..a5da486 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -16,7 +16,7 @@
+ #include "queue.h"
+ #include "transport.h"
+ #include "utils.h"
+-#include "yolo.h"
++#include "yolox.h"
+ 
+ #include <opencv2/opencv.hpp>
+ #include <vector>
+diff --git a/src/postprocess.cc b/src/postprocess.cc
+index 44d225a..c0368ca 100644
+--- a/src/postprocess.cc
++++ b/src/postprocess.cc
+@@ -12,7 +12,7 @@
+ // See the License for the specific language governing permissions and
+ // limitations under the License.
+ 
+-#include "yolo.h"
++#include "yolox.h"
+ #include "image_utils.h"
+ 
+ #include <math.h>
+@@ -465,236 +465,8 @@ static int process_i8_rv1106(int8_t *input, int32_t zp, float scale, int8_t *unu
+ }
+ #endif
+ 
+-// Simplified YOLO processing functions (unified tensor format)
+-// YoloV8-specific processing functions (9-output structure)
+-static int process_yolov8_scale_i8(int8_t *box_input, int32_t box_zp, float box_scale,
+-                                   int8_t *cls_input, int32_t cls_zp, float cls_scale,
+-                                   int8_t *obj_input, int32_t obj_zp, float obj_scale,
+-                                   int grid_h, int grid_w, int stride,
+-                                   std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId,
+-                                   float threshold)
+-{
+-    int validCount = 0;
+-    int8_t thres_i8 = qnt_f32_to_affine(threshold, obj_zp, obj_scale);
+ 
+-    for (int i = 0; i < grid_h; ++i) {
+-        for (int j = 0; j < grid_w; ++j) {
+-            int grid_idx = i * grid_w + j;
+-            
+-            // Get objectness confidence from obj_input [1, 1, H, W]
+-            int8_t box_confidence = obj_input[grid_idx];
+-            if (box_confidence >= thres_i8) {
+-                
+-                // Find max class probability from cls_input [1, 80, H, W]
+-                int8_t maxClassProbs = cls_input[grid_idx]; // class 0
+-                int maxClassId = 0;
+-                for (int k = 1; k < OBJ_CLASS_NUM; ++k) {
+-                    int8_t prob = cls_input[k * grid_h * grid_w + grid_idx];
+-                    if (prob > maxClassProbs) {
+-                        maxClassId = k;
+-                        maxClassProbs = prob;
+-                    }
+-                }
+-
+-                int8_t cls_thres_i8 = qnt_f32_to_affine(threshold, cls_zp, cls_scale);
+-                if (maxClassProbs > cls_thres_i8) {
+-                    // Get box coordinates from box_input [1, 64, H, W] 
+-                    // YoloV8 uses DFL encoding with 16 values per coordinate (64 = 4 * 16)
+-                    float box_coords[4] = {0, 0, 0, 0};
+-                    const int dfl_len = 16;
+-                    
+-                    for (int coord = 0; coord < 4; coord++) {
+-                        float exp_sum = 0;
+-                        float acc_sum = 0;
+-                        
+-                        for (int d = 0; d < dfl_len; d++) {
+-                            int dfl_idx = (coord * dfl_len + d) * grid_h * grid_w + grid_idx;
+-                            float exp_val = exp(deqnt_affine_to_f32(box_input[dfl_idx], box_zp, box_scale));
+-                            exp_sum += exp_val;
+-                            acc_sum += exp_val * d;
+-                        }
+-                        
+-                        box_coords[coord] = (exp_sum > 0) ? (acc_sum / exp_sum) : 0;
+-                    }
+-                    
+-                    // Convert DFL coordinates to absolute coordinates
+-                    float box_x = (j + 0.5f - box_coords[0]) * stride;
+-                    float box_y = (i + 0.5f - box_coords[1]) * stride;
+-                    float box_w = (j + 0.5f + box_coords[2]) * stride - box_x;
+-                    float box_h = (i + 0.5f + box_coords[3]) * stride - box_y;
+-                    
+-                    // Convert to corner coordinates
+-                    box_x = box_x - box_w / 2.0f;
+-                    box_y = box_y - box_h / 2.0f;
+-
+-                    // Calculate final confidence score
+-                    float obj_score = deqnt_affine_to_f32(box_confidence, obj_zp, obj_scale);
+-                    float cls_score = deqnt_affine_to_f32(maxClassProbs, cls_zp, cls_scale);
+-                    
+-                    objProbs.push_back(obj_score * cls_score);
+-                    classId.push_back(maxClassId);
+-                    validCount++;
+-                    boxes.push_back(box_x);
+-                    boxes.push_back(box_y);
+-                    boxes.push_back(box_w);
+-                    boxes.push_back(box_h);
+-                }
+-            }
+-        }
+-    }
+-    return validCount;
+-}
+-
+-static int process_yolov8_scale_u8(uint8_t *box_input, int32_t box_zp, float box_scale,
+-                                   uint8_t *cls_input, int32_t cls_zp, float cls_scale,
+-                                   uint8_t *obj_input, int32_t obj_zp, float obj_scale,
+-                                   int grid_h, int grid_w, int stride,
+-                                   std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId,
+-                                   float threshold)
+-{
+-    int validCount = 0;
+-    uint8_t thres_u8 = qnt_f32_to_affine_u8(threshold, obj_zp, obj_scale);
+-
+-    for (int i = 0; i < grid_h; ++i) {
+-        for (int j = 0; j < grid_w; ++j) {
+-            int grid_idx = i * grid_w + j;
+-            
+-            // Get objectness confidence from obj_input [1, 1, H, W]
+-            uint8_t box_confidence = obj_input[grid_idx];
+-            if (box_confidence >= thres_u8) {
+-                
+-                // Find max class probability from cls_input [1, 80, H, W]
+-                uint8_t maxClassProbs = cls_input[grid_idx]; // class 0
+-                int maxClassId = 0;
+-                for (int k = 1; k < OBJ_CLASS_NUM; ++k) {
+-                    uint8_t prob = cls_input[k * grid_h * grid_w + grid_idx];
+-                    if (prob > maxClassProbs) {
+-                        maxClassId = k;
+-                        maxClassProbs = prob;
+-                    }
+-                }
+-
+-                uint8_t cls_thres_u8 = qnt_f32_to_affine_u8(threshold, cls_zp, cls_scale);
+-                if (maxClassProbs > cls_thres_u8) {
+-                    // Get box coordinates from box_input [1, 64, H, W] 
+-                    // YoloV8 uses DFL encoding with 16 values per coordinate (64 = 4 * 16)
+-                    float box_coords[4] = {0, 0, 0, 0};
+-                    const int dfl_len = 16;
+-                    
+-                    for (int coord = 0; coord < 4; coord++) {
+-                        float exp_sum = 0;
+-                        float acc_sum = 0;
+-                        
+-                        for (int d = 0; d < dfl_len; d++) {
+-                            int dfl_idx = (coord * dfl_len + d) * grid_h * grid_w + grid_idx;
+-                            float exp_val = exp(deqnt_affine_u8_to_f32(box_input[dfl_idx], box_zp, box_scale));
+-                            exp_sum += exp_val;
+-                            acc_sum += exp_val * d;
+-                        }
+-                        
+-                        box_coords[coord] = (exp_sum > 0) ? (acc_sum / exp_sum) : 0;
+-                    }
+-                    
+-                    // Convert DFL coordinates to absolute coordinates
+-                    float box_x = (j + 0.5f - box_coords[0]) * stride;
+-                    float box_y = (i + 0.5f - box_coords[1]) * stride;
+-                    float box_w = (j + 0.5f + box_coords[2]) * stride - box_x;
+-                    float box_h = (i + 0.5f + box_coords[3]) * stride - box_y;
+-                    
+-                    // Convert to corner coordinates
+-                    box_x = box_x - box_w / 2.0f;
+-                    box_y = box_y - box_h / 2.0f;
+-
+-                    // Calculate final confidence score
+-                    float obj_score = deqnt_affine_u8_to_f32(box_confidence, obj_zp, obj_scale);
+-                    float cls_score = deqnt_affine_u8_to_f32(maxClassProbs, cls_zp, cls_scale);
+-                    
+-                    objProbs.push_back(obj_score * cls_score);
+-                    classId.push_back(maxClassId);
+-                    validCount++;
+-                    boxes.push_back(box_x);
+-                    boxes.push_back(box_y);
+-                    boxes.push_back(box_w);
+-                    boxes.push_back(box_h);
+-                }
+-            }
+-        }
+-    }
+-    return validCount;
+-}
+-
+-static int process_yolov8_scale_fp32(float *box_input, float *cls_input, float *obj_input,
+-                                     int grid_h, int grid_w, int stride,
+-                                     std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId,
+-                                     float threshold)
+-{
+-    int validCount = 0;
+-
+-    for (int i = 0; i < grid_h; i++) {
+-        for (int j = 0; j < grid_w; j++) {
+-            int grid_idx = i * grid_w + j;
+-            
+-            // Get objectness confidence from obj_input [1, 1, H, W]
+-            float box_confidence = obj_input[grid_idx];
+-            if (box_confidence >= threshold) {
+-                
+-                // Find max class probability from cls_input [1, 80, H, W]
+-                float maxClassProbs = cls_input[grid_idx]; // class 0
+-                int maxClassId = 0;
+-                for (int k = 1; k < OBJ_CLASS_NUM; ++k) {
+-                    float prob = cls_input[k * grid_h * grid_w + grid_idx];
+-                    if (prob > maxClassProbs) {
+-                        maxClassId = k;
+-                        maxClassProbs = prob;
+-                    }
+-                }
+-
+-                if (maxClassProbs > threshold) {
+-                    // Get box coordinates from box_input [1, 64, H, W] 
+-                    // YoloV8 uses DFL encoding with 16 values per coordinate (64 = 4 * 16)
+-                    float box_coords[4] = {0, 0, 0, 0};
+-                    const int dfl_len = 16;
+-                    
+-                    for (int coord = 0; coord < 4; coord++) {
+-                        float exp_sum = 0;
+-                        float acc_sum = 0;
+-                        
+-                        for (int d = 0; d < dfl_len; d++) {
+-                            int dfl_idx = (coord * dfl_len + d) * grid_h * grid_w + grid_idx;
+-                            float exp_val = exp(box_input[dfl_idx]);
+-                            exp_sum += exp_val;
+-                            acc_sum += exp_val * d;
+-                        }
+-                        
+-                        box_coords[coord] = (exp_sum > 0) ? (acc_sum / exp_sum) : 0;
+-                    }
+-                    
+-                    // Convert DFL coordinates to absolute coordinates
+-                    float box_x = (j + 0.5f - box_coords[0]) * stride;
+-                    float box_y = (i + 0.5f - box_coords[1]) * stride;
+-                    float box_w = (j + 0.5f + box_coords[2]) * stride - box_x;
+-                    float box_h = (i + 0.5f + box_coords[3]) * stride - box_y;
+-                    
+-                    // Convert to corner coordinates
+-                    box_x = box_x - box_w / 2.0f;
+-                    box_y = box_y - box_h / 2.0f;
+-
+-                    // Calculate final confidence score
+-                    objProbs.push_back(box_confidence * maxClassProbs);
+-                    classId.push_back(maxClassId);
+-                    validCount++;
+-                    boxes.push_back(box_x);
+-                    boxes.push_back(box_y);
+-                    boxes.push_back(box_w);
+-                    boxes.push_back(box_h);
+-                }
+-            }
+-        }
+-    }
+-    return validCount;
+-}
+-
+-static int process_simplified_yolo_u8(uint8_t *input, int grid_h, int grid_w, int height, int width, int stride,
++static int process_simplified_yolox_u8(uint8_t *input, int grid_h, int grid_w, int height, int width, int stride,
+                                       std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId, 
+                                       float threshold, int32_t zp, float scale)
+ {
+@@ -725,7 +497,7 @@ static int process_simplified_yolo_u8(uint8_t *input, int grid_h, int grid_w, in
+                     float box_w = deqnt_affine_u8_to_f32(in_ptr[2 * grid_len], zp, scale);
+                     float box_h = deqnt_affine_u8_to_f32(in_ptr[3 * grid_len], zp, scale);
+                     
+-                    // Simplified YOLO coordinate transformation
++                    // Simplified YOLOX coordinate transformation
+                     box_x = (box_x + j) * (float)stride;
+                     box_y = (box_y + i) * (float)stride;
+                     box_w = exp(box_w) * stride;
+@@ -733,7 +505,7 @@ static int process_simplified_yolo_u8(uint8_t *input, int grid_h, int grid_w, in
+                     box_x -= (box_w / 2.0);
+                     box_y -= (box_h / 2.0);
+ 
+-                    // Simplified YOLO scoring: objectness * class_score
++                    // Simplified YOLOX scoring: objectness * class_score
+                     objProbs.push_back(deqnt_affine_u8_to_f32(maxClassProbs, zp, scale) * 
+                                      deqnt_affine_u8_to_f32(box_confidence, zp, scale));
+                     classId.push_back(maxClassId);
+@@ -749,7 +521,7 @@ static int process_simplified_yolo_u8(uint8_t *input, int grid_h, int grid_w, in
+     return validCount;
+ }
+ 
+-static int process_simplified_yolo_i8(int8_t *input, int grid_h, int grid_w, int height, int width, int stride,
++static int process_simplified_yolox_i8(int8_t *input, int grid_h, int grid_w, int height, int width, int stride,
+                                       std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId, 
+                                       float threshold, int32_t zp, float scale)
+ {
+@@ -780,7 +552,7 @@ static int process_simplified_yolo_i8(int8_t *input, int grid_h, int grid_w, int
+                     float box_w = deqnt_affine_to_f32(in_ptr[2 * grid_len], zp, scale);
+                     float box_h = deqnt_affine_to_f32(in_ptr[3 * grid_len], zp, scale);
+                     
+-                    // Simplified YOLO coordinate transformation
++                    // Simplified YOLOX coordinate transformation
+                     box_x = (box_x + j) * (float)stride;
+                     box_y = (box_y + i) * (float)stride;
+                     box_w = exp(box_w) * stride;
+@@ -788,7 +560,7 @@ static int process_simplified_yolo_i8(int8_t *input, int grid_h, int grid_w, int
+                     box_x -= (box_w / 2.0);
+                     box_y -= (box_h / 2.0);
+ 
+-                    // Simplified YOLO scoring: objectness * class_score
++                    // Simplified YOLOX scoring: objectness * class_score
+                     objProbs.push_back(deqnt_affine_to_f32(maxClassProbs, zp, scale) * 
+                                      deqnt_affine_to_f32(box_confidence, zp, scale));
+                     classId.push_back(maxClassId);
+@@ -804,7 +576,7 @@ static int process_simplified_yolo_i8(int8_t *input, int grid_h, int grid_w, int
+     return validCount;
+ }
+ 
+-static int process_simplified_yolo_fp32(float *input, int grid_h, int grid_w, int height, int width, int stride,
++static int process_simplified_yolox_fp32(float *input, int grid_h, int grid_w, int height, int width, int stride,
+                                         std::vector<float> &boxes, std::vector<float> &objProbs, std::vector<int> &classId, 
+                                         float threshold)
+ {
+@@ -842,7 +614,7 @@ static int process_simplified_yolo_fp32(float *input, int grid_h, int grid_w, in
+                 }
+                 
+                 if (maxClassProbs > threshold) {
+-                    // Simplified YOLO scoring: objectness * class_score
++                    // Simplified YOLOX scoring: objectness * class_score
+                     objProbs.push_back(maxClassProbs * box_confidence);
+                     classId.push_back(maxClassId);
+                     validCount++;
+@@ -858,11 +630,11 @@ static int process_simplified_yolo_fp32(float *input, int grid_h, int grid_w, in
+ }
+ 
+ // Forward declarations for different processing paths
+-static int process_standard_yolo_outputs(rknn_app_context_t *app_ctx, void *outputs, 
++static int process_standard_yolox_outputs(rknn_app_context_t *app_ctx, void *outputs, 
+                                          std::vector<float> &filterBoxes, std::vector<float> &objProbs, 
+                                          std::vector<int> &classId, float conf_threshold);
+ 
+-static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *outputs,
++static int process_simplified_yolox_outputs(rknn_app_context_t *app_ctx, void *outputs,
+                                            std::vector<float> &filterBoxes, std::vector<float> &objProbs,
+                                            std::vector<int> &classId, float conf_threshold);
+ 
+@@ -877,14 +649,9 @@ int post_process(rknn_app_context_t *app_ctx, void *outputs, letterbox_t *letter
+ 
+     memset(od_results, 0, sizeof(object_detect_result_list));
+ 
+-    // Dispatch to appropriate processing function based on model type
+-    if (app_ctx->model_type == YOLO_SIMPLIFIED) {
+-        printf("Processing Simplified YOLO outputs\n");
+-        validCount = process_simplified_yolo_outputs(app_ctx, outputs, filterBoxes, objProbs, classId, conf_threshold);
+-    } else {
+-        printf("Processing Standard YOLO outputs\n");
+-        validCount = process_standard_yolo_outputs(app_ctx, outputs, filterBoxes, objProbs, classId, conf_threshold);
+-    }
++    // Process YOLOX outputs
++    printf("Processing YOLOX outputs\n");
++    validCount = process_standard_yolox_outputs(app_ctx, outputs, filterBoxes, objProbs, classId, conf_threshold);
+ 
+     // no object detect
+     if (validCount <= 0)
+@@ -946,8 +713,8 @@ int post_process(rknn_app_context_t *app_ctx, void *outputs, letterbox_t *letter
+     return 0;
+ }
+ 
+-// Standard YOLO processing function (DFL-based implementation)
+-static int process_standard_yolo_outputs(rknn_app_context_t *app_ctx, void *outputs, 
++// Standard YOLOX processing function (DFL-based implementation)
++static int process_standard_yolox_outputs(rknn_app_context_t *app_ctx, void *outputs, 
+                                          std::vector<float> &filterBoxes, std::vector<float> &objProbs, 
+                                          std::vector<int> &classId, float conf_threshold)
+ {
+@@ -1039,8 +806,8 @@ static int process_standard_yolo_outputs(rknn_app_context_t *app_ctx, void *outp
+     return validCount;
+ }
+ 
+-// Simplified YOLO processing function (unified tensor implementation)
+-static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *outputs,
++// Simplified YOLOX processing function (unified tensor implementation)
++static int process_simplified_yolox_outputs(rknn_app_context_t *app_ctx, void *outputs,
+                                            std::vector<float> &filterBoxes, std::vector<float> &objProbs,
+                                            std::vector<int> &classId, float conf_threshold)
+ {
+@@ -1054,74 +821,15 @@ static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *ou
+     int model_in_h = app_ctx->model_height;
+     int n_outputs = app_ctx->io_num.n_output;
+ 
+-    // Handle different Simplified YOLO structures
+-    if (n_outputs == 9) {
+-        // YoloV8 structure: 9 outputs in groups of 3 (box, class, objectness)
+-        // Process each scale level (3 scales)
+-        for (int scale = 0; scale < 3; scale++) {
+-            int box_idx = scale * 3 + 0;    // Box regression output
+-            int cls_idx = scale * 3 + 1;    // Class prediction output  
+-            int obj_idx = scale * 3 + 2;    // Objectness output
+-
+-#if defined(RV1106_1103)
+-            int grid_h = app_ctx->output_attrs[box_idx].dims[1];
+-            int grid_w = app_ctx->output_attrs[box_idx].dims[2];
+-#elif defined(RKNPU1)
+-            int grid_h = app_ctx->output_attrs[box_idx].dims[1];
+-            int grid_w = app_ctx->output_attrs[box_idx].dims[0];
+-#else
+-            int grid_h = app_ctx->output_attrs[box_idx].dims[2];
+-            int grid_w = app_ctx->output_attrs[box_idx].dims[3];
+-#endif
+-            int stride = model_in_h / grid_h;
+-
+-#if defined(RV1106_1103)
+-            if (app_ctx->is_quant) {
+-                validCount += process_yolov8_scale_i8(
+-                    (int8_t *)_outputs[box_idx]->virt_addr, app_ctx->output_attrs[box_idx].zp, app_ctx->output_attrs[box_idx].scale,
+-                    (int8_t *)_outputs[cls_idx]->virt_addr, app_ctx->output_attrs[cls_idx].zp, app_ctx->output_attrs[cls_idx].scale,
+-                    (int8_t *)_outputs[obj_idx]->virt_addr, app_ctx->output_attrs[obj_idx].zp, app_ctx->output_attrs[obj_idx].scale,
+-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
+-            } else {
+-                printf("RV1106/1103 only support quantization mode\n");
+-                return -1;
+-            }
+-#elif defined(RKNPU1)
+-            if (app_ctx->is_quant) {
+-                validCount += process_yolov8_scale_u8(
+-                    (uint8_t *)_outputs[box_idx].buf, app_ctx->output_attrs[box_idx].zp, app_ctx->output_attrs[box_idx].scale,
+-                    (uint8_t *)_outputs[cls_idx].buf, app_ctx->output_attrs[cls_idx].zp, app_ctx->output_attrs[cls_idx].scale,
+-                    (uint8_t *)_outputs[obj_idx].buf, app_ctx->output_attrs[obj_idx].zp, app_ctx->output_attrs[obj_idx].scale,
+-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
+-            } else {
+-                validCount += process_yolov8_scale_fp32(
+-                    (float *)_outputs[box_idx].buf, (float *)_outputs[cls_idx].buf, (float *)_outputs[obj_idx].buf,
+-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
+-            }
+-#else
+-            if (app_ctx->is_quant) {
+-                validCount += process_yolov8_scale_i8(
+-                    (int8_t *)_outputs[box_idx].buf, app_ctx->output_attrs[box_idx].zp, app_ctx->output_attrs[box_idx].scale,
+-                    (int8_t *)_outputs[cls_idx].buf, app_ctx->output_attrs[cls_idx].zp, app_ctx->output_attrs[cls_idx].scale,
+-                    (int8_t *)_outputs[obj_idx].buf, app_ctx->output_attrs[obj_idx].zp, app_ctx->output_attrs[obj_idx].scale,
+-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
+-            } else {
+-                validCount += process_yolov8_scale_fp32(
+-                    (float *)_outputs[box_idx].buf, (float *)_outputs[cls_idx].buf, (float *)_outputs[obj_idx].buf,
+-                    grid_h, grid_w, stride, filterBoxes, objProbs, classId, conf_threshold);
+-            }
+-#endif
+-        }
+-    } else {
+-        // Legacy 3-output Simplified YOLO structure (like YOLOX with unified tensors)
+-        for (int i = 0; i < 3; i++) {
++    // Handle 3-output structure (like YOLOX with unified tensors)
++    for (int i = 0; i < 3; i++) {
+ #if defined(RV1106_1103)
+             int grid_h = app_ctx->output_attrs[i].dims[1];
+             int grid_w = app_ctx->output_attrs[i].dims[2];
+             int stride = model_in_h / grid_h;
+             
+             if (app_ctx->is_quant) {
+-                validCount += process_simplified_yolo_i8((int8_t *)_outputs[i]->virt_addr, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
++                validCount += process_simplified_yolox_i8((int8_t *)_outputs[i]->virt_addr, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                                                         classId, conf_threshold, app_ctx->output_attrs[i].zp, app_ctx->output_attrs[i].scale);
+             } else {
+                 printf("RV1106/1103 only support quantization mode\n");
+@@ -1133,10 +841,10 @@ static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *ou
+             int stride = model_in_h / grid_h;
+ 
+             if (app_ctx->is_quant) {
+-                validCount += process_simplified_yolo_u8((uint8_t *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
++                validCount += process_simplified_yolox_u8((uint8_t *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                                                         classId, conf_threshold, app_ctx->output_attrs[i].zp, app_ctx->output_attrs[i].scale);
+             } else {
+-                validCount += process_simplified_yolo_fp32((float *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
++                validCount += process_simplified_yolox_fp32((float *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                                                           classId, conf_threshold);
+             }
+ #else
+@@ -1145,15 +853,14 @@ static int process_simplified_yolo_outputs(rknn_app_context_t *app_ctx, void *ou
+             int stride = model_in_h / grid_h;
+ 
+             if (app_ctx->is_quant) {
+-                validCount += process_simplified_yolo_i8((int8_t *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
++                validCount += process_simplified_yolox_i8((int8_t *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                                                         classId, conf_threshold, app_ctx->output_attrs[i].zp, app_ctx->output_attrs[i].scale);
+             } else {
+-                validCount += process_simplified_yolo_fp32((float *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
++                validCount += process_simplified_yolox_fp32((float *)_outputs[i].buf, grid_h, grid_w, model_in_h, model_in_w, stride, filterBoxes, objProbs,
+                                                           classId, conf_threshold);
+             }
+ #endif
+         }
+-    }
+     return validCount;
+ }
+ 
+diff --git a/src/yolo.cc b/src/yolox.cc
+similarity index 68%
+rename from src/yolo.cc
+rename to src/yolox.cc
+index 44d370d..d0ddfea 100644
+--- a/src/yolo.cc
++++ b/src/yolox.cc
+@@ -20,7 +20,7 @@
+ #include "common.h"
+ #include "file_utils.h"
+ #include "image_utils.h"
+-#include "yolo.h"
++#include "yolox.h"
+ #include "postprocess.h"
+ 
+ static void dump_tensor_attr(rknn_tensor_attr *attr)
+@@ -32,77 +32,8 @@ static void dump_tensor_attr(rknn_tensor_attr *attr)
+            get_qnt_type_string(attr->qnt_type), attr->zp, attr->scale);
+ }
+ 
+-yolo_model_type_t detect_yolo_model_type(rknn_app_context_t *app_ctx)
+-{
+-    if (!app_ctx || !app_ctx->output_attrs) {
+-        return YOLO_UNKNOWN;
+-    }
+-
+-    // Model type detection based on output structure:
+-    // - Standard YOLO (YOLOX): 3 outputs with 85 channels each [1, 85, H, W]
+-    // - Simplified YOLO (YoloV8): 9 outputs with different structure:
+-    //   * 3 box regression outputs (64 channels each): [1, 64, H, W]  
+-    //   * 3 class prediction outputs (80 channels each): [1, 80, H, W]
+-    //   * 3 objectness outputs (1 channel each): [1, 1, H, W]
+-    
+-    int n_outputs = app_ctx->io_num.n_output;
+-    
+-    if (n_outputs == 3) {
+-        // Standard YOLO (YOLOX) pattern: 3 outputs with 85 channels each
+-        // Check if all outputs have 85 channels (4 box + 1 obj + 80 classes)
+-        bool all_have_85_channels = true;
+-        for (int i = 0; i < 3; i++) {
+-            rknn_tensor_attr *output = &app_ctx->output_attrs[i];
+-            if (output->n_dims == 4 && output->fmt == RKNN_TENSOR_NCHW) {
+-                int channels = output->dims[1];
+-                if (channels != 85) {
+-                    all_have_85_channels = false;
+-                    break;
+-                }
+-            } else {
+-                all_have_85_channels = false;
+-                break;
+-            }
+-        }
+-        
+-        if (all_have_85_channels) {
+-            printf("Model type detection: Standard YOLO format detected (3 outputs, 85 channels each)\n");
+-            return YOLO_STANDARD;
+-        }
+-    }
+-    else if (n_outputs == 9) {
+-        // Simplified YOLO (YoloV8) pattern: 9 outputs in groups of 3
+-        // Expected pattern: 64-channel, 80-channel, 1-channel outputs repeated 3 times
+-        bool is_yolov8_pattern = true;
+-        int expected_channels[] = {64, 80, 1}; // Pattern repeated 3 times
+-        
+-        for (int i = 0; i < 9; i++) {
+-            rknn_tensor_attr *output = &app_ctx->output_attrs[i];
+-            int expected_ch = expected_channels[i % 3];
+-            
+-            if (output->n_dims == 4 && output->fmt == RKNN_TENSOR_NCHW) {
+-                int channels = output->dims[1];
+-                if (channels != expected_ch) {
+-                    is_yolov8_pattern = false;
+-                    break;
+-                }
+-            } else {
+-                is_yolov8_pattern = false;
+-                break;
+-            }
+-        }
+-        
+-        if (is_yolov8_pattern) {
+-            printf("Model type detection: Simplified YOLO format detected (9 outputs, YoloV8 pattern)\n");
+-            return YOLO_SIMPLIFIED;
+-        }
+-    }
+-    
+-    printf("Model type detection: Unable to determine model type (outputs: %d), defaulting to Standard YOLO\n", n_outputs);
+-    return YOLO_STANDARD;  // Default to Standard YOLO for backwards compatibility
+-}
+ 
+-int init_yolo_model(const char *model_path, rknn_app_context_t *app_ctx)
++int init_yolox_model(const char *model_path, rknn_app_context_t *app_ctx)
+ {
+     int ret;
+     int model_len = 0;
+@@ -194,16 +125,12 @@ int init_yolo_model(const char *model_path, rknn_app_context_t *app_ctx)
+     printf("model input height=%d, width=%d, channel=%d\n",
+            app_ctx->model_height, app_ctx->model_width, app_ctx->model_channel);
+ 
+-    // Detect YOLO model type based on output tensor characteristics
+-    app_ctx->model_type = detect_yolo_model_type(app_ctx);
+-    const char* model_type_str = (app_ctx->model_type == YOLO_STANDARD) ? "Standard YOLO" : 
+-                                (app_ctx->model_type == YOLO_SIMPLIFIED) ? "Simplified YOLO" : "Unknown";
+-    printf("Detected model type: %s\n", model_type_str);
++    printf("Using YOLOX model (standard format)\n");
+ 
+     return 0;
+ }
+ 
+-int release_yolo_model(rknn_app_context_t *app_ctx)
++int release_yolox_model(rknn_app_context_t *app_ctx)
+ {    
+     if (app_ctx->input_attrs != NULL)
+     {
+@@ -223,7 +150,7 @@ int release_yolo_model(rknn_app_context_t *app_ctx)
+     return 0;
+ }
+ 
+-int inference_yolo_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold) {
++int inference_yolox_model(rknn_app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results, float conf_threshold) {
+     int ret;
+     image_buffer_t dst_img;
+     letterbox_t letter_box;
+diff --git a/versioning_plan.md b/versioning_plan.md
+index e87f7e5..2d5df66 100644
+--- a/versioning_plan.md
++++ b/versioning_plan.md
+@@ -102,18 +102,18 @@ Snap's confinement and base system influenced our thinking:
+   "manifestVersion": 1,
+   
+   "extension": {
+-    "id": "com.brightsign.yolo-object-detection",
+-    "name": "YOLO Object Detection",
+-    "shortName": "YOLO",
++    "id": "com.brightsign.object-detection",
++    "name": "Object Detection",
++    "shortName": "ObjDet",
+     "version": "1.2.0",
+-    "description": "NPU-accelerated object detection using YOLO models",
++    "description": "NPU-accelerated object detection using YOLOX models",
+     "author": {
+       "name": "BrightSign LLC",
+       "email": "support@brightsign.biz",
+       "url": "https://www.brightsign.biz"
+     },
+     "license": "Apache-2.0",
+-    "homepage": "https://github.com/brightsign/yolo-extension",
++    "homepage": "https://github.com/brightsign/object-detection-extension",
+     "category": "ai-vision"
+   },
+   
+@@ -531,7 +531,7 @@ generate_manifest() {
+ {
+   "manifestVersion": 1,
+   "extension": {
+-    "id": "com.brightsign.yolo-object-detection",
++    "id": "com.brightsign.object-detection",
+     "version": "${version}",
+     ...
+   }
+@@ -852,7 +852,7 @@ rollback_extension() {
+     "dependencies": {
+       "extensions": [
+         {
+-          "id": "com.brightsign.yolo-object-detection",
++          "id": "com.brightsign.object-detection",
+           "version": "^1.2.0"
+         }
+       ]

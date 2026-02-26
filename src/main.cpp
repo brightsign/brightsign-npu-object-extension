@@ -16,9 +16,11 @@
 #include "queue.h"
 #include "transport.h"
 #include "utils.h"
-#include "yolo.h"
+#include "yolox.h"
 
 #include <opencv2/opencv.hpp>
+#include <vector>
+#include <unordered_map>
 
 
 std::atomic<bool> running{true};
@@ -34,29 +36,103 @@ void signalHandler(int signum) {
 
 int main(int argc, char **argv) {
     char *model_name = NULL;
+    char *source_name = NULL;
     bool suppress_empty = false;
     bool is_file_input = false;
+    std::string classes_str;
+    float confidence_threshold = 0.3f; // Default confidence threshold
     
-    if (argc < 3 || argc > 4) {
-        printf("Usage: %s <rknn model> <source> [--suppress-empty]\n", argv[0]);
+    if (argc < 3) {
+        printf("Usage: %s <rknn model> <source> [--suppress-empty] [--classes class1,class2,...] [--confidence-threshold value]\n", argv[0]);
         printf("  <source>: V4L device (e.g. /dev/video0) or image file (e.g. /tmp/bus.jpg)\n");
         printf("  --suppress-empty: suppress output when no detections (optional)\n");
+        printf("  --classes: comma-separated list of class names to detect (optional)\n");
+        printf("  --confidence-threshold: confidence threshold for detections (0.0-1.0, default: 0.3)\n");
         return -1;
     }
 
     // The path where the model is located
     model_name = (char *)argv[1];
-    char *source_name = argv[2];
+    source_name = argv[2];
     
-    // Check for suppress-empty flag
-    if (argc == 4 && strcmp(argv[3], "--suppress-empty") == 0) {
-        suppress_empty = true;
-        printf("Suppress-empty mode enabled\n");
+    // Parse optional flags
+    for (int i = 3; i < argc; i++) {
+        if (strcmp(argv[i], "--suppress-empty") == 0) {
+            suppress_empty = true;
+            printf("Suppress-empty mode enabled\n");
+        } else if (strcmp(argv[i], "--classes") == 0) {
+            if (i + 1 < argc) {
+                classes_str = argv[i + 1];
+                printf("Selected classes: %s\n", classes_str.c_str());
+                i++;  // Skip the next argument as it's the classes string
+            } else {
+                printf("Error: --classes flag requires a value\n");
+                return -1;
+            }
+        } else if (strcmp(argv[i], "--confidence-threshold") == 0) {
+            if (i + 1 < argc) {
+                try {
+                    confidence_threshold = std::stof(argv[i + 1]);
+                    // Validate range
+                    if (confidence_threshold < 0.0f || confidence_threshold > 1.0f) {
+                        printf("Error: confidence threshold must be between 0.0 and 1.0\n");
+                        return -1;
+                    }
+                    printf("Confidence threshold set to: %.2f\n", confidence_threshold);
+                    i++;  // Skip the next argument as it's the threshold value
+                } catch (const std::exception& e) {
+                    printf("Error: invalid confidence threshold value '%s'\n", argv[i + 1]);
+                    return -1;
+                }
+            } else {
+                printf("Error: --confidence-threshold flag requires a value\n");
+                return -1;
+            }
+        } else {
+            printf("Warning: Unknown flag '%s'\n", argv[i]);
+        }
     }
     
     // Set up signal handler
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
+    
+    // Parse class names if provided
+    std::vector<int> selected_classes = {}; // Default to include class 0 (usually "person" in COCO)
+    std::unordered_map<std::string, int> class_mapping; // Class name to ID mapping
+
+    // Always load class mapping as it's needed for proper reporting
+    // Determine model directory to find labels file
+    std::string model_dir = std::filesystem::path(model_name).parent_path();
+    if (model_dir.empty()) {
+        model_dir = ".";
+    }
+    std::string labels_path = model_dir + "/coco_80_labels_list.txt";
+    
+    // Try alternative paths if not found
+    if (!std::filesystem::exists(labels_path)) {
+        labels_path = "model/coco_80_labels_list.txt";
+    }
+    if (!std::filesystem::exists(labels_path)) {
+        labels_path = "../model/coco_80_labels_list.txt";
+    }
+    
+    class_mapping = loadCocoClassMapping(labels_path);
+    if (class_mapping.empty()) {
+        printf("Error: Could not load COCO class mapping from %s\n", labels_path.c_str());
+        return -1;
+    }
+
+    if (!classes_str.empty()) {
+        selected_classes = parseClassNames(classes_str, class_mapping);
+        if (selected_classes.empty() && !classes_str.empty()) {
+            printf("Warning: No valid classes found in '%s', using all classes\n", classes_str.c_str());
+        }
+    }
+    // ensure selected_classes always has class 0
+    if (std::find(selected_classes.begin(), selected_classes.end(), 0) == selected_classes.end()) {
+        selected_classes.push_back(0);
+    }
     
     // Determine if source is a file or device
     if (strstr(source_name, "/dev/video") == source_name) {
@@ -81,10 +157,13 @@ int main(int argc, char **argv) {
             resultQueue, 
             running,
             1, // Single frame
-            frameWriter);
+            frameWriter,
+            selected_classes,
+            class_mapping,
+            confidence_threshold);
         
         // Create formatters
-        auto json_formatter = std::make_shared<JsonMessageFormatter>(suppress_empty);
+        auto full_json_formatter = std::make_shared<FullJsonMessageFormatter>(suppress_empty);
         
         // Create file publisher using transport injection
         auto file_transport = std::make_shared<FileTransport>("/tmp/results.json");
@@ -92,7 +171,7 @@ int main(int argc, char **argv) {
             file_transport,
             resultQueue,
             running,
-            json_formatter,
+            full_json_formatter,
             1);
         
         // Run single inference and exit
@@ -113,12 +192,15 @@ int main(int argc, char **argv) {
             resultQueue, 
             running,
             30,
-            frameWriter);
+            frameWriter,
+            selected_classes,
+            class_mapping,
+            confidence_threshold);
 
         // Create formatters
-        auto json_formatter = std::make_shared<JsonMessageFormatter>(suppress_empty);
-        auto faces_json_formatter = std::make_shared<FacesJsonMessageFormatter>();
-        auto faces_bs_formatter = std::make_shared<FacesBSMessageFormatter>();
+        auto full_json_formatter = std::make_shared<FullJsonMessageFormatter>(suppress_empty);
+        auto selective_json_formatter = std::make_shared<SelectiveJsonMessageFormatter>();
+        auto selective_bs_formatter = std::make_shared<SelectiveBSMessageFormatter>();
         
         // Create file publisher using transport injection
         auto file_transport = std::make_shared<FileTransport>("/tmp/results.json");
@@ -126,22 +208,22 @@ int main(int argc, char **argv) {
             file_transport,
             resultQueue,
             running,
-            json_formatter,
+            full_json_formatter,
             1); // Write to file once per second
 
-        // Create UDP publishers for faces data
+        // Create UDP publishers for selective class data
         UDPPublisher udp_json_publisher(
             "127.0.0.1", 5002,
             resultQueue,
             running,
-            faces_json_formatter,
+            selective_json_formatter,
             1); // Send JSON to port 5002
 
         UDPPublisher udp_bs_publisher(
             "127.0.0.1", 5000,
             resultQueue,
             running,
-            faces_bs_formatter,
+            selective_bs_formatter,
             1); // Send BrightScript to port 5000
 
         std::thread inferenceThread(std::ref(mlThread));

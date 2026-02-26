@@ -1,7 +1,9 @@
 #include "publisher.h"
+#include "utils.h"
 
 #include <iostream>
 #include <thread>
+#include <unordered_map>
 
 // Implementation of the JsonMessageFormatter
 std::string JsonMessageFormatter::formatMessage(const InferenceResult& result) {
@@ -10,56 +12,93 @@ std::string JsonMessageFormatter::formatMessage(const InferenceResult& result) {
     // Add timestamp
     j["timestamp"] = std::chrono::system_clock::to_time_t(result.timestamp);
     
-    // Serialize the detection results
-    json detection_results;
-    json results_array = json::array();
-    int valid_count = 0;
+    // Initialize counts for all selected classes to 0
+    std::unordered_map<std::string, int> class_counts;
+    if (result.selected_classes.empty()) {
+        // If no classes specified, initialize "person" as default
+        class_counts["person"] = 0;
+    } else {
+        // Initialize all selected classes with 0
+        for (int class_id : result.selected_classes) {
+            std::string class_name = getClassNameById(class_id, result.class_mapping);
+            class_counts[class_name] = 0;
+        }
+    }
     
-    // Filter and serialize only valid detections if suppress_empty is enabled
+    // Count detections by class name for selected classes only
     for (int i = 0; i < result.detections.count; ++i) {
         const auto& detection = result.detections.results[i];
         
-        // If suppress_empty is enabled, filter out detections with prop 0 or cls_id 0
-        if (suppress_empty && (detection.prop == 0.0f || detection.cls_id == 0)) {
+        // Skip invalid detections, below threshold, or if not in selected classes
+        if ((detection.prop <= 0.0f ||  detection.cls_id < 0 || detection.prop < result.confidence_threshold) || 
+            !isClassSelected(detection.cls_id, result.selected_classes)) {
             continue;
         }
         
-        json detection_obj;
-        
-        // Box coordinates
-        detection_obj["box"] = {
-            {"left", detection.box.left},
-            {"top", detection.box.top}, 
-            {"right", detection.box.right},
-            {"bottom", detection.box.bottom}
-        };
-        
-        // Detection properties
-        detection_obj["score"] = detection.prop;
-        detection_obj["class_id"] = detection.cls_id;
-        detection_obj["name"] = std::string(detection.name);  // Convert char array to string
-        
-        results_array.push_back(detection_obj);
-        valid_count++;
+        std::string class_name = std::string(detection.name);
+        if (class_counts.find(class_name) != class_counts.end()) {
+            class_counts[class_name]++;
+        }
     }
     
-    // Set the count to the number of valid detections
-    detection_results["count"] = valid_count;
-    detection_results["results"] = results_array;
-    
-    // Set the complete detection results as the main object
-    j["object_detect_result_list"] = detection_results;
+    // Add class counts to JSON
+    for (const auto& [class_name, count] : class_counts) {
+        j[class_name] = count;
+    }
     
     return j.dump();
 }
 
+// Implementation of MappedMessageFormatter helper functions
+std::vector<object_detect_result> MappedMessageFormatter::extractSelectedClasses(const InferenceResult& result) const {
+    std::vector<object_detect_result> selected_detections;
+    
+    for (int i = 0; i < result.detections.count; ++i) {
+        const auto& detection = result.detections.results[i];
+        
+        // Skip invalid detections or below threshold
+        if (detection.prop <= 0.0f || detection.cls_id < 0 || detection.prop < result.confidence_threshold) {
+            continue;
+        }
+        
+        // Only include selected classes
+        if (isClassSelected(detection.cls_id, result.selected_classes)) {
+            selected_detections.push_back(detection);
+        }
+    }
+    
+    return selected_detections;
+}
+
+std::string MappedMessageFormatter::mapClassName(const std::string& original_name) const {
+    auto it = class_mapping.find(original_name);
+    if (it != class_mapping.end()) {
+        return it->second;
+    }
+    return original_name;
+}
+
 // Implementation of the BSVariableMessageFormatter
 std::string BSVariableMessageFormatter::formatMessage(const InferenceResult& result) {
+    // Count high-confidence detections
+    int valid_count = 0;
+    for (int i = 0; i < result.detections.count; ++i) {
+        const auto& detection = result.detections.results[i];
+        if (detection.prop >= result.confidence_threshold && detection.prop > 0.0f && detection.cls_id >= 0) {
+            valid_count++;
+        }
+    }
+    
     // format the message as a string like detection_count:2!!timestamp:1746732409
     std::string message = 
-        "detection_count:" + std::to_string(result.detections.count) + "!!" +
+        "detection_count:" + std::to_string(valid_count) + "!!" +
         "timestamp:" + std::to_string(std::chrono::system_clock::to_time_t(result.timestamp));
     return message;
+}
+
+// Implementation of the FacesJsonMessageFormatter constructor
+FacesJsonMessageFormatter::FacesJsonMessageFormatter() {
+    class_mapping["person"] = "faces";
 }
 
 // Implementation of the FacesJsonMessageFormatter
@@ -70,7 +109,7 @@ std::string FacesJsonMessageFormatter::formatMessage(const InferenceResult& resu
     int people_count = 0;
     for (int i = 0; i < result.detections.count; ++i) {
         const auto& detection = result.detections.results[i];
-        if (detection.cls_id == 0) { // "person" class
+        if (detection.cls_id == 0 && detection.prop >= result.confidence_threshold) { // "person" class above threshold
             people_count++;
         }
     }
@@ -83,13 +122,18 @@ std::string FacesJsonMessageFormatter::formatMessage(const InferenceResult& resu
     return j.dump();
 }
 
+// Implementation of the FacesBSMessageFormatter constructor
+FacesBSMessageFormatter::FacesBSMessageFormatter() {
+    class_mapping["person"] = "faces";
+}
+
 // Implementation of the FacesBSMessageFormatter  
 std::string FacesBSMessageFormatter::formatMessage(const InferenceResult& result) {
     // Count people (class_id == 0)
     int people_count = 0;
     for (int i = 0; i < result.detections.count; ++i) {
         const auto& detection = result.detections.results[i];
-        if (detection.cls_id == 0) { // "person" class
+        if (detection.cls_id == 0 && detection.prop >= result.confidence_threshold) { // "person" class above threshold
             people_count++;
         }
     }
@@ -99,6 +143,96 @@ std::string FacesBSMessageFormatter::formatMessage(const InferenceResult& result
         "faces_in_frame_total:" + std::to_string(people_count) + "!!" +
         "faces_attending:" + std::to_string(people_count) + "!!" +
         "timestamp:" + std::to_string(std::chrono::system_clock::to_time_t(result.timestamp));
+    return message;
+}
+
+// Implementation of the SelectiveJsonMessageFormatter
+std::string SelectiveJsonMessageFormatter::formatMessage(const InferenceResult& result) {
+    json j;
+    
+    // Add timestamp
+    j["timestamp"] = std::chrono::system_clock::to_time_t(result.timestamp);
+    
+    // Extract only selected class detections
+    std::vector<object_detect_result> selected_detections = extractSelectedClasses(result);
+    
+    // Initialize counts for all selected classes to 0
+    std::unordered_map<std::string, int> class_counts;
+    if (result.selected_classes.empty()) {
+        // If no classes specified, initialize "person" as default
+        class_counts["person"] = 0;
+    } else {
+        // Initialize all selected classes with 0
+        for (int class_id : result.selected_classes) {
+            std::string class_name = getClassNameById(class_id, result.class_mapping);
+            std::string mapped_name = mapClassName(class_name);
+            class_counts[mapped_name] = 0;
+        }
+    }
+    
+    // Count detections by class name for selected classes only
+    for (const auto& detection : selected_detections) {
+        std::string class_name = std::string(detection.name);
+        std::string mapped_name = mapClassName(class_name);
+        if (class_counts.find(mapped_name) != class_counts.end()) {
+            class_counts[mapped_name]++;
+        }
+    }
+    
+    // Add class counts to JSON
+    for (const auto& [class_name, count] : class_counts) {
+        j[class_name] = count;
+    }
+    
+    return j.dump();
+}
+
+// Implementation of the SelectiveBSMessageFormatter
+std::string SelectiveBSMessageFormatter::formatMessage(const InferenceResult& result) {
+    // Extract only selected class detections
+    std::vector<object_detect_result> selected_detections = extractSelectedClasses(result);
+    
+    // Initialize counts for all selected classes to 0
+    std::unordered_map<std::string, int> class_counts;
+    if (result.selected_classes.empty()) {
+        // If no classes specified, initialize "person" as default
+        class_counts["person"] = 0;
+    } else {
+        // Initialize all selected classes with 0
+        for (int class_id : result.selected_classes) {
+            std::string class_name = getClassNameById(class_id, result.class_mapping);
+            std::string mapped_name = mapClassName(class_name);
+            class_counts[mapped_name] = 0;
+        }
+    }
+    
+    // Count detections by class name for selected classes only
+    for (const auto& detection : selected_detections) {
+        std::string class_name = std::string(detection.name);
+        std::string mapped_name = mapClassName(class_name);
+        if (class_counts.find(mapped_name) != class_counts.end()) {
+            class_counts[mapped_name]++;
+        }
+    }
+    
+    // Build BrightScript format message
+    std::string message;
+    bool first = true;
+    
+    for (const auto& [class_name, count] : class_counts) {
+        if (!first) {
+            message += "!!";
+        }
+        message += class_name + ":" + std::to_string(count);
+        first = false;
+    }
+    
+    // Add timestamp
+    if (!message.empty()) {
+        message += "!!";
+    }
+    message += "timestamp:" + std::to_string(std::chrono::system_clock::to_time_t(result.timestamp));
+    
     return message;
 }
 
@@ -132,6 +266,52 @@ void Publisher::operator()() {
 
         std::this_thread::sleep_for(std::chrono::milliseconds(1000 / target_mps));
     }
+}
+
+// Implementation of the FullJsonMessageFormatter
+std::string FullJsonMessageFormatter::formatMessage(const InferenceResult& result) {
+    json j;
+    
+    // Add timestamp
+    j["timestamp"] = std::chrono::system_clock::to_time_t(result.timestamp);
+    
+    // Create detections array
+    json detections = json::array();
+    
+    for (int i = 0; i < result.detections.count; ++i) {
+        const auto& detection = result.detections.results[i];
+        
+        // Skip invalid detections or if not in selected classes
+        if ((detection.prop <= 0.0f || detection.cls_id < 0) || 
+            !isClassSelected(detection.cls_id, result.selected_classes)) {
+            continue;
+        }
+        
+        // Create detection object with all details
+        json det;
+        det["class_id"] = detection.cls_id;
+        det["class_name"] = std::string(detection.name);
+        det["confidence"] = detection.prop;
+        det["bbox"] = {
+            {"left", detection.box.left},
+            {"top", detection.box.top},
+            {"right", detection.box.right},
+            {"bottom", detection.box.bottom}
+        };
+        
+        detections.push_back(det);
+    }
+    
+    // Add detections array to JSON
+    j["detections"] = detections;
+    j["detection_count"] = detections.size();
+    
+    // Handle suppress_empty flag
+    if (suppress_empty && detections.empty()) {
+        return "";
+    }
+    
+    return j.dump();
 }
 
 // UDPPublisher backward compatibility wrapper

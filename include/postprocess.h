@@ -3,7 +3,7 @@
 
 #include "rknn_api.h"
 #include "common.h"
-#include "yolo.h"
+#include "yolox.h"
 #include "image_utils.h"
 
 int post_process(rknn_app_context_t* app_ctx, void* outputs, letterbox_t* letter_box, 

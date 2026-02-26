@@ -3,7 +3,7 @@
 
 #include <string>
 #include <opencv2/opencv.hpp>
-#include "yolo.h"
+#include "yolox.h"
 
 // Forward declaration for InferenceResult
 struct InferenceResult;
