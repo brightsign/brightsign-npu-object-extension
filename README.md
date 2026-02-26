@@ -189,7 +189,7 @@ __Note__: Use underscores instead of spaces (e.g., `cell_phone`, not `cell phone
 
 ## 📄 Extension Versioning & Manifest
 
-### Version Information
+___IMPORTANT___: Building an OpenEmbedded project can be very particular in terms of packages and setup. For that reason it __strongly recommended__ to use the [Docker build](https://github.com/brightsign/extension-template/blob/main/README.md#recommended-docker) approach.
 
 - **Current Version**: 1.2.0
 - **Minimum OS**: BrightSign OS 9.0.0+
@@ -204,11 +204,14 @@ To customize version information for your own extensions:
 # Copy the template
 cp manifest-config.template.json manifest-config.json
 
-# Edit your extension details
-# - Version number
-# - Description
-# - Author information
-# - Compatibility requirements
+sudo sh -c 'echo 120000 > /proc/sys/vm/max_map_count'
+# increase the map count to allow docker to build
+echo "vm.max_map_count = 120000" | sudo tee /etc/sysctl.d/local.conf
+# make it permanent
+
+docker run -it --rm \
+  -v $(pwd)/brightsign-oe:/home/builder/bsoe -v $(pwd)/srv:/srv \
+  bsoe-build
 
 # Package automatically generates manifest.json
 ./package
