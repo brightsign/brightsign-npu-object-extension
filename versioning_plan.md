@@ -113,7 +113,7 @@ Snap's confinement and base system influenced our thinking:
       "url": "https://www.brightsign.biz"
     },
     "license": "Apache-2.0",
-    "homepage": "https://github.com/brightsign/object-detection-extension",
+    "homepage": "https://github.com/brightsign/brightsign-npu-object-extension",
     "category": "ai-vision"
   },
   
