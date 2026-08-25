@@ -4,25 +4,34 @@
 
 This project provides a complete, automated build system to create BrightSign extensions that run object detection on the NPU at ~30 FPS with selective class detection and configurable confidence thresholds.
 
+> **Looking for a complete solution?**
+> [**Argus**](https://github.com/brightsign/argus-audience-measurement-extension) is BrightSign's
+> reference audience-measurement application: person counting, gaze detection, dwell time,
+> entry/exit events, and movement analytics, published over MQTT and Prometheus. This repository
+> is a single-purpose example of one piece of that system.
+>
+> *Argus uses YOLOX person detection plus ByteTrack tracking for the same job, generalized.*
+
 ## Use It vs. Build It
 
 If you just want to use this BSMP extension but don't want to build it, you can just download it.
 
-* [cobra-standalone-npu_obj-0.1.1-alpha.bsfw](https://github.com/brightsign/brightsign-npu-object-extension/releases/download/v0.1.1-alpha/cobra-npu_obj-0.1.1-alpha.bsfw)
+* [Download the latest release](https://github.com/brightsign/brightsign-npu-object-extension/releases/latest)
 
 It can be installed just like any other BrightSign firmware upgrade:  copy it to an SD card and boot the player with that card inserted.
 
-## Pracical Real-World Example
+## Practical Real-World Example
 
 A [simple BrightAuthor:connected presentation](https://github.com/brightsign/simple-object-detection-presentation) demonstrating the object detection BSMP is available for demonstration purposes.
 
 ## Release Status
 
-This is an **ALPHA** quality release, intended mostly for educational purposes. This model is not tuned for optimum performance and has had only standard testing.  **NOT RECOMMENDED FOR PRODUCTION USE**.
+**ALPHA.** Educational use only — not recommended for production. This model is not tuned for
+optimum performance and has had only standard testing. Interfaces may change without notice.
 
 ## Image Streamer Included
 
-For test and debug purposes only, we have included a debug and test tool.  You can access a web page on the player to "see" what the output of the AI model is visually.  It will show "bounding boxes" around objects of interest.  This is started automatically and can be accessed at http://<player ip>:20200 by default.
+For test and debug purposes only, we have included a debug and test tool.  You can access a web page on the player to "see" what the output of the AI model is visually.  It will show "bounding boxes" around objects of interest.  This is started automatically and can be accessed at `http://<PLAYER_IP>:20200` by default.
 
 For more information, please see the [tool documentation](https://github.com/brightsign/bs-image-stream-server).
 
@@ -37,7 +46,7 @@ __Total Time__: 60-90 minutes | __Prerequisites__: Docker, git, x86_64 Linux hos
 
 ```bash
 # 1. Clone and setup environment (5-10 minutes)
-git clone <repository-url>
+git clone git@github.com:brightsign/brightsign-npu-object-extension.git
 cd brightsign-npu-object-extension
 ./setup
 
